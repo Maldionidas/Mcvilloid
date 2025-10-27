@@ -1,0 +1,24 @@
+{
+  "gains": {
+    "pitch": {"kp": 1.2, "kd": 0.14},
+    "roll":  {"kp": 2.4, "kd": 0.42}
+  },
+  "mix": {"pitch_to_ankle": 0.6, "roll_to_ankle": 0.9},
+  "deadband_deg": 1.0,
+  "soft_start_s": 2.5,
+  "limits": {
+    "ankle_pos": 0.8, "ankle_vel": 2.0,
+    "hip_pos": 0.10, "hip_vel": 1.2
+  },
+  "signs": {"invert_pitch": true, "invert_roll": false},
+  "enable_I": false,
+  "ki": {"pitch": 0.0, "roll": 0.0},
+  "fc_d_pitch_hz": 14.0,
+  "fc_d_roll_hz": 14.0,
+  "joint_signs": {
+    "ankle_pitch": -1.0,
+    "hip_pitch":   1.0,
+    "ankle_roll":  1.0,
+    "hip_roll":    1.0
+  }
+}

@@ -1,0 +1,6 @@
+source;share/mcvilloid/hook/pythonpath.ps1
+source;share/mcvilloid/hook/pythonpath.dsv
+source;share/mcvilloid/hook/pythonpath.sh
+source;share/mcvilloid/hook/ament_prefix_path.ps1
+source;share/mcvilloid/hook/ament_prefix_path.dsv
+source;share/mcvilloid/hook/ament_prefix_path.sh

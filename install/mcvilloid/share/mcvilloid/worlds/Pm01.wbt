@@ -1,0 +1,68 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+IMPORTABLE EXTERNPROTO "../protos/Pm01.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation -0.05707880472862219 -0.9610120550535726 0.27055099351593787 5.851028018055615
+  position -6.185930536345622 -0.20059142729531254 1.9443177061842032
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  floorSize 10 10
+}
+Pm01 {
+  name "Pm01"
+  translation 0 0 0.83
+  controller "mcvilloid_controller"
+  customData "{ \"mode\":\"joints\", \"imu_name\":\"imu_sensor\", \"rate_hz\":100, \"targets_deg\":{ \"roll\":0.0, \"pitch\":1.5 }, \"gains\":{ \"roll\":{ \"kp\":6.0, \"kd\":0.20 }, \"pitch\":{ \"kp\":4.5, \"kd\":0.35 } }, \"joints\":{ \"ankle_pitch_left\":\"j04_ankle_pitch_l\", \"ankle_roll_left\":\"j05_ankle_roll_l\", \"hip_pitch_left\":\"j00_hip_pitch_l\", \"hip_roll_left\":\"j01_hip_roll_l\", \"ankle_pitch_right\":\"j10_ankle_pitch_r\", \"ankle_roll_right\":\"j11_ankle_roll_r\", \"hip_pitch_right\":\"j06_hip_pitch_r\", \"hip_roll_right\":\"j07_hip_roll_r\" }, \"limits\":{ \"ankle_pos\":0.45, \"ankle_vel\":5.0, \"hip_pos\":0.35, \"hip_vel\":3.5 }, \"mix\":{ \"pitch_to_ankle\":0.70, \"roll_to_ankle\":0.85 }, \"deadband_deg\":0.2, \"soft_start_s\":0.8, \"signs\":{ \"invert_pitch\":false, \"invert_roll\":false }, \"mapping\":{ \"ankle_roll_opposite\":true, \"hip_roll_opposite\":false } }"
+  
+#  customData "{ 
+#    \"mode\":\"joints\", 
+#    \"imu_name\":\"imu_sensor\", 
+#    \"rate_hz\":100, 
+#    \"targets_deg\":{ \"roll\":0.0, \"pitch\":0.0 }, 
+#    \"gains\":{ \"roll\":{ \"kp\":10.0, \"kd\":0.12 }, 
+#    \"pitch\":{ \"kp\":12.0, \"kd\":0.14 } }, 
+
+#    \"joints\":{ 
+#      \"ankle_pitch_left\":\"j04_ankle_pitch_l\", 
+#      \"ankle_roll_left\":\"j05_ankle_roll_l\", 
+#      \"hip_pitch_left\":\"j00_hip_pitch_l\", 
+#      \"hip_roll_left\":\"j01_hip_roll_l\", 
+#      \"ankle_pitch_right\":\"j10_ankle_pitch_r\", 
+#      \"ankle_roll_right\":\"j11_ankle_roll_r\", 
+#      \"hip_pitch_right\":\"j06_hip_pitch_r\", 
+#      \"hip_roll_right\":\"j07_hip_roll_r\" }, 
+      
+#    \"limits\":{ 
+#      \"ankle_pos\":0.35, 
+#      \"ankle_vel\":3.0, 
+#      \"hip_pos\":0.25, 
+#      \"hip_vel\":2.0 
+#    },
+
+#    \"mix\":{ 
+#      \"pitch_to_ankle\":0.75, 
+#      \"roll_to_ankle\":0.75 },
+     
+#    \"deadband_deg\":0.3, 
+#    \"soft_start_s\":1.05,
+#    \"signs\":{ 
+#      \"invert_pitch\":false, 
+#      \"invert_roll\":true 
+#    },
+      
+#    \"mapping\":{ 
+#      \"ankle_roll_opposite\":true, 
+#      \"hip_roll_opposite\":false
+#    }
+#  }"
+}

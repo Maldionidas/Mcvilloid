@@ -1,0 +1,23 @@
+[0.628s] Invoking command in '/home/maldonado/ros2_ws/src/mcvilloid': PYTHONPATH=/home/maldonado/ros2_ws/build/mcvilloid/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/mcvilloid build --build-base /home/maldonado/ros2_ws/build/mcvilloid/build install --record /home/maldonado/ros2_ws/build/mcvilloid/install.log --single-version-externally-managed install_data
+[0.766s] running egg_info
+[0.766s] writing ../../build/mcvilloid/mcvilloid.egg-info/PKG-INFO
+[0.766s] writing dependency_links to ../../build/mcvilloid/mcvilloid.egg-info/dependency_links.txt
+[0.766s] writing entry points to ../../build/mcvilloid/mcvilloid.egg-info/entry_points.txt
+[0.766s] writing requirements to ../../build/mcvilloid/mcvilloid.egg-info/requires.txt
+[0.766s] writing top-level names to ../../build/mcvilloid/mcvilloid.egg-info/top_level.txt
+[0.766s] reading manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+[0.772s] writing manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+[0.774s] running build
+[0.774s] running build_py
+[0.774s] running install
+[0.774s] running install_lib
+[0.774s] running install_data
+[0.774s] copying worlds/Pm01.wbt -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/worlds
+[0.776s] copying protos/Pm01.proto -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/protos
+[0.778s] copying controllers/mcvilloid_controller/mcvilloid_controller.py -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/controllers/mcvilloid_controller
+[0.778s] running install_egg_info
+[0.780s] removing '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info' (and everything under it)
+[0.780s] Copying ../../build/mcvilloid/mcvilloid.egg-info to /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info
+[0.781s] running install_scripts
+[0.792s] writing list of installed files to '/home/maldonado/ros2_ws/build/mcvilloid/install.log'
+[0.804s] Invoked command in '/home/maldonado/ros2_ws/src/mcvilloid' returned '0': PYTHONPATH=/home/maldonado/ros2_ws/build/mcvilloid/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/mcvilloid build --build-base /home/maldonado/ros2_ws/build/mcvilloid/build install --record /home/maldonado/ros2_ws/build/mcvilloid/install.log --single-version-externally-managed install_data

@@ -1,0 +1,27 @@
+[0.399s] Invoking command in '/home/maldonado/ros2_ws/src/mcvilloid': PYTHONPATH=/home/maldonado/ros2_ws/build/mcvilloid/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/mcvilloid build --build-base /home/maldonado/ros2_ws/build/mcvilloid/build install --record /home/maldonado/ros2_ws/build/mcvilloid/install.log --single-version-externally-managed install_data
+[0.585s] running egg_info
+[0.586s] writing ../../build/mcvilloid/mcvilloid.egg-info/PKG-INFO
+[0.586s] writing dependency_links to ../../build/mcvilloid/mcvilloid.egg-info/dependency_links.txt
+[0.587s] writing entry points to ../../build/mcvilloid/mcvilloid.egg-info/entry_points.txt
+[0.587s] writing requirements to ../../build/mcvilloid/mcvilloid.egg-info/requires.txt
+[0.588s] writing top-level names to ../../build/mcvilloid/mcvilloid.egg-info/top_level.txt
+[0.589s] reading manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+[0.589s] writing manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+[0.590s] running build
+[0.590s] running build_py
+[0.590s] running install
+[0.590s] running install_lib
+[0.591s] running install_data
+[0.591s] running install_egg_info
+[0.594s] removing '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info' (and everything under it)
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/entry_points.txt'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/dependency_links.txt'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/SOURCES.txt'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/top_level.txt'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/zip-safe'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/PKG-INFO'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/requires.txt'
+[0.594s] error removing /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info: [Errno 39] Directory not empty: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info'
+[0.594s] Copying ../../build/mcvilloid/mcvilloid.egg-info to /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info
+[0.594s] error: [Errno 13] Permission denied: '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info/entry_points.txt'
+[0.609s] Invoked command in '/home/maldonado/ros2_ws/src/mcvilloid' returned '1': PYTHONPATH=/home/maldonado/ros2_ws/build/mcvilloid/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/mcvilloid build --build-base /home/maldonado/ros2_ws/build/mcvilloid/build install --record /home/maldonado/ros2_ws/build/mcvilloid/install.log --single-version-externally-managed install_data

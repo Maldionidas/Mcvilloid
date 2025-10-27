@@ -1,0 +1,38 @@
+running egg_info
+creating ../../build/mcvilloid/mcvilloid.egg-info
+writing ../../build/mcvilloid/mcvilloid.egg-info/PKG-INFO
+writing dependency_links to ../../build/mcvilloid/mcvilloid.egg-info/dependency_links.txt
+writing entry points to ../../build/mcvilloid/mcvilloid.egg-info/entry_points.txt
+writing requirements to ../../build/mcvilloid/mcvilloid.egg-info/requires.txt
+writing top-level names to ../../build/mcvilloid/mcvilloid.egg-info/top_level.txt
+writing manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+reading manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+writing manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/maldonado/ros2_ws/build/mcvilloid/build
+creating /home/maldonado/ros2_ws/build/mcvilloid/build/lib
+creating /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid
+copying mcvilloid/__init__.py -> /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid
+copying mcvilloid/my_first_node.py -> /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid
+copying mcvilloid/mi_controlador.py -> /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid
+running install
+running install_lib
+creating /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid
+copying /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid/__init__.py -> /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid
+copying /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid/my_first_node.py -> /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid
+copying /home/maldonado/ros2_ws/build/mcvilloid/build/lib/mcvilloid/mi_controlador.py -> /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid
+byte-compiling /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid/my_first_node.py to my_first_node.cpython-310.pyc
+byte-compiling /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid/mi_controlador.py to mi_controlador.cpython-310.pyc
+running install_data
+creating /home/maldonado/ros2_ws/install/mcvilloid/share/ament_index
+creating /home/maldonado/ros2_ws/install/mcvilloid/share/ament_index/resource_index
+creating /home/maldonado/ros2_ws/install/mcvilloid/share/ament_index/resource_index/packages
+copying resource/mcvilloid -> /home/maldonado/ros2_ws/install/mcvilloid/share/ament_index/resource_index/packages
+copying package.xml -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid
+running install_egg_info
+Copying ../../build/mcvilloid/mcvilloid.egg-info to /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info
+running install_scripts
+Installing my_first_node script to /home/maldonado/ros2_ws/install/mcvilloid/lib/mcvilloid
+writing list of installed files to '/home/maldonado/ros2_ws/build/mcvilloid/install.log'

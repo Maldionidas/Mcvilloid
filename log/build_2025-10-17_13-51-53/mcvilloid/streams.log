@@ -1,0 +1,47 @@
+[0.349s] Invoking command in '/home/maldonado/ros2_ws/src/mcvilloid': PYTHONPATH=/home/maldonado/ros2_ws/build/mcvilloid/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/mcvilloid build --build-base /home/maldonado/ros2_ws/build/mcvilloid/build install --record /home/maldonado/ros2_ws/build/mcvilloid/install.log --single-version-externally-managed install_data
+[0.474s] running egg_info
+[0.474s] writing ../../build/mcvilloid/mcvilloid.egg-info/PKG-INFO
+[0.474s] writing dependency_links to ../../build/mcvilloid/mcvilloid.egg-info/dependency_links.txt
+[0.474s] writing entry points to ../../build/mcvilloid/mcvilloid.egg-info/entry_points.txt
+[0.475s] writing requirements to ../../build/mcvilloid/mcvilloid.egg-info/requires.txt
+[0.475s] writing top-level names to ../../build/mcvilloid/mcvilloid.egg-info/top_level.txt
+[0.476s] reading manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+[0.476s] writing manifest file '../../build/mcvilloid/mcvilloid.egg-info/SOURCES.txt'
+[0.476s] running build
+[0.476s] running build_py
+[0.477s] running install
+[0.477s] running install_lib
+[0.477s] running install_data
+[0.478s] copying worlds/Pm01.wbt -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/worlds
+[0.478s] copying meshes/pm01_only_legs.urdf -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.478s] copying meshes/link_head_yaw.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.480s] copying meshes/link_shoulder_yaw_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.482s] copying meshes/link_hip_pitch_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.482s] copying meshes/link_shoulder_pitch_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.485s] copying meshes/link_shoulder_yaw_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.487s] copying meshes/link_torso_yaw.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.492s] copying meshes/link_ankle_roll_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.493s] copying meshes/link_elbow_yaw_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.494s] copying meshes/link_hip_roll_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.494s] copying meshes/link_hip_roll_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.495s] copying meshes/link_shoulder_pitch_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.497s] copying meshes/link_hip_pitch_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.498s] copying meshes/link_shoulder_roll_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.499s] copying meshes/link_ankle_pitch_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.499s] copying meshes/link_ankle_roll_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.501s] copying meshes/link_elbow_yaw_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.501s] copying meshes/link_elbow_pitch_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.504s] copying meshes/link_ankle_pitch_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.504s] copying meshes/link_base.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.505s] copying meshes/link_knee_pitch_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.506s] copying meshes/link_knee_pitch_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.508s] copying meshes/link_elbow_pitch_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.511s] copying meshes/link_hip_yaw_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.511s] copying meshes/link_hip_yaw_r.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.512s] copying meshes/link_shoulder_roll_l.stl -> /home/maldonado/ros2_ws/install/mcvilloid/share/mcvilloid/meshes
+[0.513s] running install_egg_info
+[0.515s] removing '/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info' (and everything under it)
+[0.515s] Copying ../../build/mcvilloid/mcvilloid.egg-info to /home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages/mcvilloid-0.0.0-py3.10.egg-info
+[0.516s] running install_scripts
+[0.528s] writing list of installed files to '/home/maldonado/ros2_ws/build/mcvilloid/install.log'
+[0.540s] Invoked command in '/home/maldonado/ros2_ws/src/mcvilloid' returned '0': PYTHONPATH=/home/maldonado/ros2_ws/build/mcvilloid/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/maldonado/ros2_ws/install/mcvilloid/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/mcvilloid build --build-base /home/maldonado/ros2_ws/build/mcvilloid/build install --record /home/maldonado/ros2_ws/build/mcvilloid/install.log --single-version-externally-managed install_data
