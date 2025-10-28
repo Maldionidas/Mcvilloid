@@ -12,13 +12,10 @@ Cambios clave respecto a v2.1:
 
 # ====================== PASO 0: IMPORTS & HELPERS ======================
 from controller import Robot
-import json, math
-import os
-
+import json, math, os
 
 def clamp(x, lo, hi):
     return max(lo, min(hi, x))
-
 
 DEBUG = True  # logs extra al arrancar
 
@@ -36,7 +33,6 @@ try:
 except Exception:
     print("[WARN] customData inválido; usando defaults.")
     cfg = {}
-
 
 def deep_update(dst, src):
     for k, v in src.items():
@@ -133,7 +129,10 @@ def get_motor(name: str, vel_limit: float):
         return None
     m = robot.getDevice(name)  # API moderna
     if m:
-        m.setVelocity(vel_limit)
+        try:
+            m.setVelocity(vel_limit)
+        except Exception:
+            pass
     return m
 
 imu = robot.getDevice(imu_name) if imu_name else None
@@ -181,12 +180,10 @@ start_time = robot.getTime()
 rate_limit = math.radians(60.0) * base_dt  # 60 deg/s — ajustable
 last_cmds = {"ankle_pitch": 0.0, "hip_pitch": 0.0, "ankle_roll": 0.0, "hip_roll": 0.0}
 
-
 def soft_scale():
     if soft_start_s <= 0:
         return 1.0
     return clamp((robot.getTime() - start_time) / soft_start_s, 0.0, 1.0)
-
 
 def apply_pair_same(lm, rm, cmd, pos_lim, key):
     # rate limiting
@@ -197,7 +194,6 @@ def apply_pair_same(lm, rm, cmd, pos_lim, key):
     if lm: lm.setPosition(c_applied)
     if rm: rm.setPosition(c_applied)
     return c_applied
-
 
 def apply_pair_opposite(lm, rm, cmd, pos_lim, key):
     cmd_rl = clamp(cmd, last_cmds[key] - rate_limit, last_cmds[key] + rate_limit)

@@ -205,6 +205,7 @@ PROTO Pm01 [
                                       ]
                                       endPoint Solid {
                                         translation 0.000000 0.000000 -0.015000
+                                        contactMaterial "foot"
                                         children [
                                           Shape {
                                             appearance DEF link_ankle_roll_l_material PBRAppearance {
@@ -218,7 +219,12 @@ PROTO Pm01 [
                                           }
                                         ]
                                         name "link_ankle_roll_l"
-                                        boundingObject USE link_ankle_roll_l
+                                        boundingObject Transform {
+                                          translation 0.04 0 -0.03
+                                          children [
+                                            Box { size 0.25 0.1 0.03 }
+                                          ]
+                                        }
                                         physics Physics {
                                           density -1
                                           mass 0.717868
@@ -228,6 +234,7 @@ PROTO Pm01 [
                                             -2.888000e-05 -1.463800e-04 -2.050000e-06
                                           ]
                                         }
+
                                       }
                                     }
                                   ]
@@ -467,6 +474,7 @@ PROTO Pm01 [
                                       ]
                                       endPoint Solid {
                                         translation 0.000000 0.000000 -0.015000
+                                        contactMaterial "foot"
                                         children [
                                           Shape {
                                             appearance DEF link_ankle_roll_r_material PBRAppearance {
@@ -480,7 +488,12 @@ PROTO Pm01 [
                                           }
                                         ]
                                         name "link_ankle_roll_r"
-                                        boundingObject USE link_ankle_roll_r
+                                        boundingObject Transform {
+                                          translation 0.04 0 -0.03
+                                          children [
+                                            Box { size 0.25 0.1 0.03 }
+                                          ]
+                                        }
                                         physics Physics {
                                           density -1
                                           mass 0.715592
@@ -490,6 +503,7 @@ PROTO Pm01 [
                                             3.022000e-05 -1.434600e-04 1.940000e-06
                                           ]
                                         }
+
                                       }
                                     }
                                   ]
