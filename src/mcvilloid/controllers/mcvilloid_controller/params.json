@@ -1,22 +1,105 @@
 {
   "enable_I": true,
-
   "gains": {
-    "pitch": {"kp": 0.95, "kd": 0.30},
-    "roll":  {"kp": 1.20, "kd": 0.38}
+    "pitch": { "kp": 1.6, "kd": 0.45 },
+    "roll":  { "kp": 1.8, "kd": 0.55 }
   },
-  "ki": {"pitch": 0.02, "roll": 0.025},
+  "ki": { "pitch": 0.015, "roll": 0.02 },
 
-  "deadband_deg": 1.8,
-  "soft_start_s": 3.0,
+  "mix": { "pitch_to_ankle": 0.8, "roll_to_ankle": 0.7 },
+
+  "deadband_deg": 0.2,
+  "soft_start_s": 2.5,
 
   "limits": {
-    "ankle_pos": 0.08,
-    "ankle_vel": 0.45,
-    "hip_pos":   0.10,
-    "hip_vel":   0.60
+    "ankle_pos": 0.22,
+    "ankle_vel": 1.2,
+    "hip_pos":   0.30,
+    "hip_vel":   1.8
   },
 
-  "fc_d_pitch_hz": 18.0,
-  "fc_d_roll_hz":  20.0
+  "signs": { "invert_pitch": true, "invert_roll": false },
+
+  "fc_d_pitch_hz": 22.0,
+  "fc_d_roll_hz": 25.0,
+
+  "joint_signs": {
+    "ankle_pitch_l": 1.0,
+    "hip_pitch_l":   1.0,
+    "ankle_roll_l":  1.0,
+    "hip_roll_l":    1.0,
+    "ankle_pitch_r": 1.0,
+    "hip_pitch_r":   1.0,
+    "ankle_roll_r":  1.0,
+    "hip_roll_r":    1.0
+  },
+
+  "imu_name": "imu_sensor",
+
+  "motors": [
+    "j00_hip_pitch_l",
+    "j01_hip_roll_l",
+    "j02_hip_yaw_l",
+    "j03_knee_pitch_l",
+    "j04_ankle_pitch_l",
+    "j05_ankle_roll_l",
+    "j06_hip_pitch_r",
+    "j07_hip_roll_r",
+    "j08_hip_yaw_r",
+    "j09_knee_pitch_r",
+    "j10_ankle_pitch_r",
+    "j11_ankle_roll_r"
+  ],
+
+  "neutral_pose": {
+    "j00_hip_pitch_l": -0.08,
+    "j01_hip_roll_l":  0.0,
+    "j02_hip_yaw_l":   0.0,
+    "j03_knee_pitch_l": 0.15,
+    "j04_ankle_pitch_l": -0.05,
+    "j05_ankle_roll_l":  0.0,
+
+    "j06_hip_pitch_r":  -0.08,
+    "j07_hip_roll_r":   0.0,
+    "j08_hip_yaw_r":    0.0,
+    "j09_knee_pitch_r": 0.15,
+    "j10_ankle_pitch_r": -0.05,
+    "j11_ankle_roll_r":  0.0
+  },
+
+  "gait": {
+    "enabled_on_start": false,
+    "auto_on": false,
+    "freq_hz": 0.35,
+    "soft_start_s": 0.6,
+    "phase_offset": { "L": 0.0, "R": 3.1415926 },
+    "direction": "forward",
+    "step_amp": {
+      "hip_pitch":   0.14,
+      "knee_pitch":  0.20,
+      "ankle_pitch": 0.05
+    },
+    "lateral_amp": {
+      "hip_roll":   0.05,
+      "ankle_roll": 0.04
+    },
+    "bias": {
+      "torso_pitch": 0.03,
+      "ankle_pitch":  -0.02
+    }
+  },
+
+  "logging": {
+    "enabled": true,
+    "level": "info",
+    "rate_hz": 8,
+    "channels": {
+      "boot": true,
+      "imu": true,
+      "balance": true,
+      "gait": true,
+      "motors": false
+    }
+  },
+  "debug": { "log_every": 7, "print_imu": true, "print_cmd": true }
 }

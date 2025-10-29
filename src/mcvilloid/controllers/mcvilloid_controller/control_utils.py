@@ -1,5 +1,32 @@
 # control_utils.py
+from __future__ import annotations
+
 import math
+from typing import Iterable, Tuple
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    """Satura x al rango [lo, hi]."""
+    if lo > hi:
+        lo, hi = hi, lo
+    return max(lo, min(hi, x))
+
+def radians_clamp(x: float, lim: float) -> float:
+    """Satura x al rango [-|lim|, +|lim|] en radianes."""
+    lim = abs(lim)
+    return clamp(x, -lim, +lim)
+
+def clamp_dict(d: dict, limits: dict) -> dict:
+    """Devuelve un dict nuevo con cada clave saturada por sus límites si existen.
+    limits: { 'joint_name': (lo, hi), ... }
+    """
+    out = {}
+    for k, v in d.items():
+        if k in limits:
+            lo, hi = limits[k]
+            out[k] = clamp(v, lo, hi)
+        else:
+            out[k] = v
+    return out
 
 class LowPass:
     def __init__(self, cutoff_hz, dt):
