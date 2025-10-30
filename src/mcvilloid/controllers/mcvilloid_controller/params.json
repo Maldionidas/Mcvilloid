@@ -1,14 +1,17 @@
 {
   "enable_I": true,
   "gains": {
-    "pitch": { "kp": 1.6, "kd": 0.45 },
-    "roll":  { "kp": 1.8, "kd": 0.55 }
+    "pitch": { "kp": 1.1, "kd": 0.24 },
+    "roll":  { "kp": 1.2, "kd": 0.28 }
   },
-  "ki": { "pitch": 0.015, "roll": 0.02 },
+  "ki": { "pitch": 0.009, "roll": 0.010 },
+
+  "i_limit_deg": 8.0,
+
 
   "mix": { "pitch_to_ankle": 0.8, "roll_to_ankle": 0.7 },
 
-  "deadband_deg": 0.2,
+  "deadband_deg": 1.0,
   "soft_start_s": 2.5,
 
   "limits": {
@@ -18,21 +21,18 @@
     "hip_vel":   1.8
   },
 
-  "signs": { "invert_pitch": true, "invert_roll": false },
+  "signs": { "invert_pitch": false, "invert_roll": false },
 
-  "fc_d_pitch_hz": 22.0,
-  "fc_d_roll_hz": 25.0,
+  "fc_d_pitch_hz": 12.0,
+  "fc_d_roll_hz": 14.0,
 
   "joint_signs": {
-    "ankle_pitch_l": 1.0,
-    "hip_pitch_l":   1.0,
-    "ankle_roll_l":  1.0,
-    "hip_roll_l":    1.0,
-    "ankle_pitch_r": 1.0,
-    "hip_pitch_r":   1.0,
-    "ankle_roll_r":  1.0,
-    "hip_roll_r":    1.0
+    "ankle_pitch": 1.0,
+    "hip_pitch":   1.0,
+    "ankle_roll":  1.0,
+    "hip_roll":    1.0
   },
+
 
   "imu_name": "imu_sensor",
 
@@ -52,18 +52,18 @@
   ],
 
   "neutral_pose": {
-    "j00_hip_pitch_l": -0.08,
+    "j00_hip_pitch_l": -0.15,
     "j01_hip_roll_l":  0.0,
     "j02_hip_yaw_l":   0.0,
     "j03_knee_pitch_l": 0.15,
-    "j04_ankle_pitch_l": -0.05,
+    "j04_ankle_pitch_l": -0.04,
     "j05_ankle_roll_l":  0.0,
 
-    "j06_hip_pitch_r":  -0.08,
+    "j06_hip_pitch_r":  -0.15,
     "j07_hip_roll_r":   0.0,
     "j08_hip_yaw_r":    0.0,
     "j09_knee_pitch_r": 0.15,
-    "j10_ankle_pitch_r": -0.05,
+    "j10_ankle_pitch_r": -0.04,
     "j11_ankle_roll_r":  0.0
   },
 

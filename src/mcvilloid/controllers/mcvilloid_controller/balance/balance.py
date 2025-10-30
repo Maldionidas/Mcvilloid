@@ -29,6 +29,7 @@ class BalanceController:
         # integradores
         self.i_pitch = 0.0
         self.i_roll = 0.0
+        self.i_lim_deg = float(self.p.get("i_limit_deg", 8.0))
 
         # cache de nombres de joints (ajusta a tu convención)
         self.joints = {
@@ -87,6 +88,8 @@ class BalanceController:
         if self.enable_I:
             self.i_pitch += e_p_db * dt
             self.i_roll  += e_r_db * dt
+            self.i_pitch = max(-self.i_lim_deg, min(self.i_lim_deg, self.i_pitch))
+            self.i_roll  = max(-self.i_lim_deg,  min(self.i_lim_deg,  self.i_roll))
 
         # PID (realmente PD + I opcional) en grados -> luego pasamos a rad
         kp_p = float(self.gains.get("pitch", {}).get("kp", 0.0))
@@ -119,14 +122,16 @@ class BalanceController:
         s_hr = float(self.joint_signs.get("hip_roll",    1.0))
 
         deltas = {
-            "LLegUay": s_ap * u_ap,   # ankle pitch L
-            "LLegLhy": s_hp * u_hp,   # hip pitch L
-            "LLegLax": s_ar * u_ar,   # ankle roll L
-            "LLegMhx": s_hr * u_hr,   # hip roll L
-            "RLegUay": s_ap * u_ap,   # ankle pitch R (si comparten signo)
-            "RLegLhy": s_hp * u_hp,
-            "RLegLax": s_ar * u_ar,
-            "RLegMhx": s_hr * u_hr,
+            # Left leg
+            "j04_ankle_pitch_l": s_ap * u_ap,
+            "j00_hip_pitch_l":   s_hp * u_hp,
+            "j05_ankle_roll_l":  s_ar * u_ar,
+            "j01_hip_roll_l":    s_hr * u_hr,
+            # Right leg
+            "j10_ankle_pitch_r": s_ap * u_ap,
+            "j06_hip_pitch_r":   s_hp * u_hp,
+            "j11_ankle_roll_r":  s_ar * u_ar,
+            "j07_hip_roll_r":    s_hr * u_hr,
         }
 
         # clamp por límites (pos/vel) se hace fuera, sobre target final

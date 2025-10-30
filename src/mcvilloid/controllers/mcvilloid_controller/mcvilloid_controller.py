@@ -199,43 +199,43 @@ def run():
             if j in target:
                 target[j] += off
 
-        # 2.5) Tilt-guard: atenúa zancada y corrige con tobillos
-
-        tilt = pitch  # +: torso adelante, -: torso atrás
-
-        TZ = 0.08
-        TL = 0.30
-        if abs(tilt) <= TZ:
-            gait_gain = 1.0
-        else:
-            gait_gain = max(0.0, 1.0 - (abs(tilt) - TZ) / (TL - TZ))  # ← piso en 0.30
-
-        walker.set_global_gain(gait_gain * gait_gain)
-
-        # PD en tobillo y cadera. OJO con signos: sumamos u_* al target.
-        Kp_ANK = 0.35
-        Kd_ANK = 0.08
-        Ki_ANK = 0.05
-
-        Kp_HIP = 1.0
-        Kd_HIP = 0.12
-
-        # Integrador anti-sesgo (clamp para evitar windup)
-        pitch_I += tilt * dt
-        pitch_I = max(-I_LIM, min(I_LIM, pitch_I))
-
-
-        # Si gy no es pitch rate, cambia por el eje correcto del gyro (ver abajo).
-        u_ank = -(Kp_ANK * tilt + Kd_ANK * (-pitch_rate)) + Ki_ANK * pitch_I
-        u_hip = -(Kp_HIP * tilt + Kd_HIP * (-pitch_rate))
-
-        for jname in ("j04_ankle_pitch_l", "j10_ankle_pitch_r"):
-            if jname in target:
-                target[jname] += u_ank    # antes: target[jname] -= u_ank
-
-        for jname in ("j00_hip_pitch_l", "j06_hip_pitch_r"):
-            if jname in target:
-                target[jname] += u_hip    # antes: target[jname] -= u_hip
+#        # 2.5) Tilt-guard: atenúa zancada y corrige con tobillos
+#
+#        tilt = pitch  # +: torso adelante, -: torso atrás
+#
+#        TZ = 0.08
+#        TL = 0.30
+#        if abs(tilt) <= TZ:
+#            gait_gain = 1.0
+#        else:
+#            gait_gain = max(0.0, 1.0 - (abs(tilt) - TZ) / (TL - TZ))  # ← piso en 0.30
+#
+#        walker.set_global_gain(gait_gain * gait_gain)
+#
+#        # PD en tobillo y cadera. OJO con signos: sumamos u_* al target.
+#        Kp_ANK = 0.35
+#        Kd_ANK = 0.08
+#        Ki_ANK = 0.05
+#
+#        Kp_HIP = 1.0
+#        Kd_HIP = 0.12
+#
+#        # Integrador anti-sesgo (clamp para evitar windup)
+#        pitch_I += tilt * dt
+#        pitch_I = max(-I_LIM, min(I_LIM, pitch_I))
+#
+#
+#        # Si gy no es pitch rate, cambia por el eje correcto del gyro (ver abajo).
+#        u_ank = -(Kp_ANK * tilt + Kd_ANK * (-pitch_rate)) + Ki_ANK * pitch_I
+#        u_hip = -(Kp_HIP * tilt + Kd_HIP * (-pitch_rate))
+#
+#        for jname in ("j04_ankle_pitch_l", "j10_ankle_pitch_r"):
+#            if jname in target:
+#                target[jname] += u_ank    # antes: target[jname] -= u_ank
+#
+#        for jname in ("j00_hip_pitch_l", "j06_hip_pitch_r"):
+#            if jname in target:
+#                target[jname] += u_hip    # antes: target[jname] -= u_hip
 
 
         
