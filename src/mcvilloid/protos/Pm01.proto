@@ -37,6 +37,11 @@ PROTO Pm01 [
       InertialUnit {
             name "imu_sensor"
       }
+      GPS {
+        name "gps"
+        accuracy 0.0
+        samplingPeriod 16
+      }
       Gyro{ name "gyro"}
       HingeJoint {
         jointParameters HingeJointParameters {
@@ -222,7 +227,7 @@ PROTO Pm01 [
                                         boundingObject Transform {
                                           translation 0.04 0 -0.03
                                           children [
-                                            Box { size 0.25 0.1 0.03 }
+                                            Box { size 0.25 0.14 0.03 }
                                           ]
                                         }
                                         physics Physics {
@@ -491,7 +496,7 @@ PROTO Pm01 [
                                         boundingObject Transform {
                                           translation 0.04 0 -0.03
                                           children [
-                                            Box { size 0.25 0.1 0.03 }
+                                            Box { size 0.25 0.14 0.03 }
                                           ]
                                         }
                                         physics Physics {

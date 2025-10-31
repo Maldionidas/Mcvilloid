@@ -7,10 +7,29 @@ IMPORTABLE EXTERNPROTO "../protos/Pm01.proto"
 
 WorldInfo {
   basicTimeStep 16
+  contactProperties [
+    ContactProperties {
+      material1 "foot"
+      coulombFriction [
+        2
+      ]
+      bounce 0
+      forceDependentSlip [
+        0.02
+      ]
+      softCFM 0.0001
+    }
+    ContactProperties {
+      coulombFriction [
+        2
+      ]
+      bounce 0
+    }
+  ]
 }
 Viewpoint {
-  orientation 0.08254793684024833 -0.07847845799703872 -0.9934923098614429 4.655301735342918
-  position 0.2777471192899734 -5.865000939336219 1.7167744703497707
+  orientation 0.07279042436994135 -0.03472593542968584 -0.9967425261964982 4.02928796549544
+  position 4.178482602480801 -4.136572969261586 1.5893253824691016
 }
 TexturedBackground {
 }
@@ -21,5 +40,5 @@ RectangleArena {
 }
 Pm01 {
   translation 0 0 0.83
-  customData "{ \"mode\":\"joints\", \"imu_name\":\"imu_sensor\", \"gyro_name\":\"gyro\", \"rate_hz\":100, \"targets_deg\":{ \"roll\":0.0, \"pitch\":0.0 }, \"gains\":{ \"roll\":{ \"kp\":2.8, \"kd\":0.36 }, \"pitch\":{ \"kp\":3.6, \"kd\":1.60, \"ki\":0.08 } }, \"anti_windup\":{\"pitch_backcalc\":2.5,\"i_clamp\":0.25, \"reset_on_sat\":true}, \"ki\":{ \"roll\":0.0, \"pitch\":0.06 }, \"k_aw_pitch\":2.5, \"joints\":{ \"ankle_pitch_left\":\"j04_ankle_pitch_l\", \"ankle_roll_left\":\"j05_ankle_roll_l\", \"hip_pitch_left\":\"j00_hip_pitch_l\", \"hip_roll_left\":\"j01_hip_roll_l\", \"ankle_pitch_right\":\"j10_ankle_pitch_r\", \"ankle_roll_right\":\"j11_ankle_roll_r\", \"hip_pitch_right\":\"j06_hip_pitch_r\", \"hip_roll_right\":\"j07_hip_roll_r\" }, \"limits\":{ \"ankle_pitch_cmd\": { \"min\": -0.18, \"max\": 0.18 }, \"hip_pitch_cmd\": { \"min\": -0.45, \"max\": 0.45 } }, \"filters\":{ \"gyro_lpf_tau_s\":0.045, \"cmd_lpf_tau_s\":0.08 }, \"rate_limit\":{\"ankle_pitch_cmd_rad_per_s\":1.6, \"hip_pitch_cmd_rad_per_s\": 2.5 }, \"bias\":{ \"pitch_offset\":{ \"estimate_on_start_s\":0.4, \"enable_dynamic\":true, \"clamp_rad\":0.03, \"wy_quiet_thresh\":0.20}, \"gyro_wy\":{ \"enable\":true, \"ki\": 0.02, \"clamp\":0.15}}, \"stance\":{ \"ankle_bias_deg\":0.0, \"hip_bias_deg\":0.0 }, \"mix\":{ \"pitch_to_ankle\":0.60, \"roll_to_ankle\":0.90 }, \"deadband_deg\":1.2, \"soft_start_s\":2.0, \"offset\":{ \"pitch\":{ \"estimate_on_start_s\":0.4, \"enable_dynamic\":true, \"clamp_rad\":0.03, \"wy_quiet_thresh\":0.20 }, \"gyro_bias\":{\"wy\":{\"enable\":true, \"ki\":0.02, \"clamp\":0.15} }}, \"references\":{\"pitch_ref_rad\":0.02}, \"signs\":{ \"invert_pitch\":true, \"invert_roll\":false }, \"joint_signs\":{ \"ankle_pitch\":-1.0, \"hip_pitch\":-1.0, \"ankle_roll\":1.0, \"hip_roll\":1.0 }, \"mapping\":{ \"ankle_roll_opposite\":true, \"hip_roll_opposite\":false }, \"fall_arrest\":{\"pitch_neg_trig\":-0.10, \"boost_duration_s\":0.20,\"hip_boost_add\":0.08}, \"scheduling\":{ \"abs_pitch_rad_thresh\":0.12, \"pitch_to_hip_hi\":0.70, \"kd_pitch_hi\":1.8} }"
+  customData "{ \"mode\":\"joints\", \"imu_name\":\"imu_sensor\", \"gyro_name\":\"gyro\", \"rate_hz\":100, \"targets_deg\":{ \"roll\":0.0, \"pitch\":0.0 }, \"gains\":{ \"roll\":{ \"kp\":2.8, \"kd\":0.36 }, \"pitch\":{ \"kp\":3.6, \"kd\":1.60, \"ki\":0.08 } }, \"anti_windup\":{\"pitch_backcalc\":2.5,\"i_clamp\":0.25, \"reset_on_sat\":true}, \"ki\":{ \"roll\":0.0, \"pitch\":0.06 }, \"k_aw_pitch\":2.5, \"joints\":{ \"ankle_pitch_left\":\"j04_ankle_pitch_l\", \"ankle_roll_left\":\"j05_ankle_roll_l\", \"hip_pitch_left\":\"j00_hip_pitch_l\", \"hip_roll_left\":\"j01_hip_roll_l\", \"ankle_pitch_right\":\"j10_ankle_pitch_r\", \"ankle_roll_right\":\"j11_ankle_roll_r\", \"hip_pitch_right\":\"j06_hip_pitch_r\", \"hip_roll_right\":\"j07_hip_roll_r\" }, \"limits\":{ \"ankle_pitch_cmd\": { \"min\": -0.18, \"max\": 0.18 }, \"hip_pitch_cmd\": { \"min\": -0.45, \"max\": 0.45 } }, \"filters\":{ \"gyro_lpf_tau_s\":0.045, \"cmd_lpf_tau_s\":0.08 }, \"rate_limit\":{\"ankle_pitch_cmd_rad_per_s\":1.6, \"hip_pitch_cmd_rad_per_s\": 2.5 }, \"bias\":{ \"pitch_offset\":{ \"estimate_on_start_s\":0.4, \"enable_dynamic\":true, \"clamp_rad\":0.03, \"wy_quiet_thresh\":0.20}, \"gyro_wy\":{ \"enable\":true, \"ki\": 0.02, \"clamp\":0.15}}, \"stance\":{ \"ankle_bias_deg\":0.0, \"hip_bias_deg\":0.0 }, \"mix\":{ \"pitch_to_ankle\":0.60, \"roll_to_ankle\":0.90 }, \"deadband_deg\":1.2, \"soft_start_s\":2.0, \"offset\":{ \"pitch\":{ \"estimate_on_start_s\":0.4, \"enable_dynamic\":true, \"clamp_rad\":0.03, \"wy_quiet_thresh\":0.20 }, \"gyro_bias\":{\"wy\":{\"enable\":true, \"ki\":0.02, \"clamp\":0.15} }}, \"references\":{\"pitch_ref_rad\":0.02}, \"signs\":{ \"invert_pitch\":false, \"invert_roll\":false }, \"joint_signs\":{ \"ankle_pitch\":-1.0, \"hip_pitch\":-1.0, \"ankle_roll\":1.0, \"hip_roll\":1.0 }, \"mapping\":{ \"ankle_roll_opposite\":true, \"hip_roll_opposite\":true }, \"fall_arrest\":{\"pitch_neg_trig\":-0.10, \"boost_duration_s\":0.20,\"hip_boost_add\":0.08}, \"scheduling\":{ \"abs_pitch_rad_thresh\":0.12, \"pitch_to_hip_hi\":0.70, \"kd_pitch_hi\":1.8} }"
 }

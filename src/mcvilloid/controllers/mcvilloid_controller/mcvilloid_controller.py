@@ -83,6 +83,10 @@ def run():
     gyro = robot.getDevice("gyro")
     if gyro:
         gyro.enable(TIME_STEP)
+    
+    gps = robot.getDevice('gps')
+    gps.enable(TIME_STEP)
+
 
 
     # --- Motores (desde params.json) ---
@@ -129,6 +133,22 @@ def run():
     last_log_t   = 0.0
     sample_joints = ["j03_knee_pitch_l", "j09_knee_pitch_r", "j04_ankle_pitch_l"]
 
+    # ======================== FSM ========================
+    state = "STAND"
+    gait_enable = False
+    walker_last_on = False
+    clamp_hit = False
+    clamp_timer = 0.0
+    prelean_timer = 0.0
+    PRELEAN_TIME = 0.25  # s para estabilizar antes de caminar
+    PRELEAN_HIP = 0.03  # rad de pitch hacia adelante antes de caminar
+    #umbrales
+    T_ENTER = 0.08  # rad para poder caminar
+    T_EXIT  = 0.06  # rad para dejar de caminar
+    T_FALL = 0.32 # rad para caer y resetear
+    CLAMP_TAU = 0.25  # s de clamp sostenido para recover
+    RECOVER_TIME = 0.25 # s de interpolacion "rapida" a neutral
+
         # --- helper: clamp con log (sin depender de 'step') ---
     last_clamp_log = {}  # por articulación
 
@@ -141,6 +161,8 @@ def run():
             if now - last >= cooldown_s:
                 LOG.info("clamp",f"[CLAMP] {j}: {x:+.3f} -> {clamped:+.3f} (lim ±{lim:.2f})")
                 last_clamp_log[j] = now
+            nonlocal clamp_hit
+            clamp_hit = True
         return clamped
 
 
@@ -158,11 +180,12 @@ def run():
         key = kb.getKey()
         while key != -1:
             if key in (ord('W'), ord('w')):
-                walker.toggle(True)
-                LOG.info("gait", "Walker: ON")
+                gait_enable = True
+                LOG.info("gait","gait_enable = True")
             elif key in (ord('S'), ord('s')):
-                walker.toggle(False)
-                LOG.info("gait", "Walker: OFF")
+                gait_enable = False
+                LOG.info("gait","gait_enable = False")
+
             elif key in (ord('A'), ord('a')):  # backward
                 walker.dir = -1.0
                 LOG.info("gait", "Direction: BACKWARD")
@@ -199,46 +222,78 @@ def run():
             if j in target:
                 target[j] += off
 
-#        # 2.5) Tilt-guard: atenúa zancada y corrige con tobillos
-#
-#        tilt = pitch  # +: torso adelante, -: torso atrás
-#
-#        TZ = 0.08
-#        TL = 0.30
-#        if abs(tilt) <= TZ:
-#            gait_gain = 1.0
-#        else:
-#            gait_gain = max(0.0, 1.0 - (abs(tilt) - TZ) / (TL - TZ))  # ← piso en 0.30
-#
-#        walker.set_global_gain(gait_gain * gait_gain)
-#
-#        # PD en tobillo y cadera. OJO con signos: sumamos u_* al target.
-#        Kp_ANK = 0.35
-#        Kd_ANK = 0.08
-#        Ki_ANK = 0.05
-#
-#        Kp_HIP = 1.0
-#        Kd_HIP = 0.12
-#
-#        # Integrador anti-sesgo (clamp para evitar windup)
-#        pitch_I += tilt * dt
-#        pitch_I = max(-I_LIM, min(I_LIM, pitch_I))
-#
-#
-#        # Si gy no es pitch rate, cambia por el eje correcto del gyro (ver abajo).
-#        u_ank = -(Kp_ANK * tilt + Kd_ANK * (-pitch_rate)) + Ki_ANK * pitch_I
-#        u_hip = -(Kp_HIP * tilt + Kd_HIP * (-pitch_rate))
-#
-#        for jname in ("j04_ankle_pitch_l", "j10_ankle_pitch_r"):
-#            if jname in target:
-#                target[jname] += u_ank    # antes: target[jname] -= u_ank
-#
-#        for jname in ("j00_hip_pitch_l", "j06_hip_pitch_r"):
-#            if jname in target:
-#                target[jname] += u_hip    # antes: target[jname] -= u_hip
-
-
+        # === 2.5) FSM: decide STAND / WALK / RECOVER y el tilt-guard ===
+        # Eventos7
+        T_WARN = 0.18
+        near_fall = (abs(pitch) > T_FALL) or (abs(roll) > 0.28) or (abs(pitch) > T_WARN and gait_gain < 0.6)
         
+        can_walk  = abs(pitch) < T_ENTER
+        should_stand = abs(pitch) < T_EXIT
+
+        # Tilt-guard: solo escala amplitud del gait
+        TZ, TL = 0.08, 0.30
+        if abs(pitch) <= TZ:
+            gait_gain = 1.0
+        else:
+            gait_gain = max(0.0, 1.0 - (abs(pitch) - TZ) / (TL - TZ))
+        # Puedes usar gait_gain**2 si quieres más suave
+         # Pitch guard
+        pTZ, pTL = 0.08, 0.30
+        g_p = 1.0 if abs(pitch) <= pTZ else max(0.0, 1.0 - (abs(pitch) - pTZ)/(pTL - pTZ))
+        # Roll guard (más estricto)
+        rTZ, rTL = 0.06, 0.25
+        g_r = 1.0 if abs(roll)  <= rTZ else max(0.0, 1.0 - (abs(roll)  - rTZ)/(rTL - rTZ))
+        gait_gain = min(gait_gain, 0.50)
+
+        # Transiciones
+        if state == "STAND":
+            if near_fall:
+                state = "RECOVER"; recover_timer = 0.0
+            elif gait_enable and can_walk:
+                state = "PRELEAN"; prelean_timer = 0.0
+        elif state == "WALK":
+            if near_fall:
+                state = "RECOVER"; recover_timer = 0.0
+            elif not gait_enable:
+                state = "STAND"
+        elif state == "PRELEAN":
+            prelean_timer += dt
+            if not gait_enable:
+                state = "STAND"
+            elif prelean_timer >= PRELEAN_TIME:
+                state = "WALK"
+        elif state == "RECOVER":
+            recover_timer += dt
+            if recover_timer >= RECOVER_TIME and should_stand:
+                state = "STAND"
+
+        # Salidas por estado
+        if state == "STAND":
+            desired_on = False
+            walker.set_global_gain(0.0)
+            # target ya es base_pose → mantiene neutral con balance
+        elif state == "PRELEAN":
+            desired_on = False
+            walker.set_global_gain(0.0)
+     # inclina leve el torso hacia delante con caderas (simétrico)
+            for jname in ("j00_hip_pitch_l","j06_hip_pitch_r"):
+                if jname in target:
+                    target[jname] += PRELEAN_HIP
+        elif state == "WALK":
+            desired_on = True
+            if getattr(walker, "dir", None) is None:
+                walker.dir = 1.0  # default forward
+            walker.set_global_gain(gait_gain)
+        elif state == "RECOVER":
+            desired_on = False
+            walker.set_global_gain(0.0)
+            # mantener target en neutral; balance ON estabiliza
+
+        # Aplica on/off sólo si cambia (evita spamear toggle)
+        if desired_on != walker_last_on:
+            walker.toggle(desired_on)
+            walker_last_on = desired_on
+            LOG.info("gait", f"Walker: {'ON' if desired_on else 'OFF'} | state={state}")
 
 
         # 3) Marcha (walker)
@@ -258,6 +313,13 @@ def run():
             elif ("hip_pitch" in j) or ("hip_roll" in j) or ("knee_pitch" in j):
                 target[j] = rclamp_with_flag(j, ref, hip_lim)
 
+        if clamp_hit: clamp_timer += dt
+        else: clamp_timer = 0.0
+        clamp_hit = False
+        if state == "WALK" and clamp_timer >= CLAMP_TAU:
+                state = "RECOVER"; recover_timer = 0.0
+
+
         # 5) Aplicar
         for n, m in motors.items():
             m.setPosition(target[n])
@@ -266,9 +328,13 @@ def run():
         if log_cfg.get("enabled", True) and log_cfg.get("rate_hz", 10) > 0:
             period = 1.0 / float(log_cfg.get("rate_hz", 10))
             if (t - last_log_t) >= period:
+                LOG.info("gait", f"state={state} gain={getattr(walker,'_global_gain',1.0):.2f} | pitch={pitch:+.3f}")
                 sj = ", ".join(f"{j}={target.get(j,0.0):+.3f}" for j in sample_joints if j in target)
                 print(f"[IMU] t={t:6.2f}s pitch={pitch:+.3f} roll={roll:+.3f} steps={step_count} | {sj}", flush=True)
                 last_log_t = t
+                x, y, z = gps.getValues()
+                LOG.info("gps",f"[GPS] x={x:.3f} z={z:.3f}")
+
 
 if __name__ == "__main__":
     run()
