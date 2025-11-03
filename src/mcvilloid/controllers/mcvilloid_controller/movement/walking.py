@@ -1,191 +1,302 @@
-# src/mcvilloid/controllers/mcvilloid_controller/movement/walking.py
+# src/mcvilloid/movement/walking.py
+# -*- coding: utf-8 -*-
+"""
+Walker (FSM) para PM01
+----------------------
+- Constructor compatible con tu controller: Walker(params, limits, logger=None)
+- Métodos usados por tu controller:
+    - toggle(on: bool)
+    - set_global_gain(g: float)
+    - step(dt: float, imu: dict, sensors: dict) -> Dict[str, float]
+- Atributos que lees en logs:
+    - .on (bool)
+    - .dir (float)   # +1 forward, -1 backward
+    - .phase (float) # 0..1
+    - ._global_gain (float)  # (interno, pero lo usas en logs)
+
+Características:
+- Rodilla más alta en swing (knee_swing_max_rad)
+- Boost de cadera en swing (hip_swing_boost_rad)
+- Dorsiflexión en mitad de swing (dorsi_mid_rad, ventana [a,b])
+- Trayectoria de pie parabólica (clearance_m) — usada para referencia (IK opcional)
+- Limitadores de velocidad (slew) anti-“patada”
+- Gate de estabilidad por IMU (reduce amplitudes si tilt)
+- FSM interna con cuatro fases: STANCE_L → SWING_R → STANCE_R → SWING_L
+"""
+
+from __future__ import annotations
 import math
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, Optional, Callable
+
+
+# ====== Utilidades ======
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    return hi if x > hi else lo if x < lo else x
+
+def bell_window(x: float, a: float, b: float) -> float:
+    """Ventana suave con pico en mitad del intervalo [a,b]."""
+    if x < a or x > b:
+        return 0.0
+    t = (x - a) / (b - a)
+    return 4.0 * t * (1.0 - t)  # máximo 1 en el centro
+
+def foot_height(phi: float, hmax: float) -> float:
+    """Altura de pie parabólica: z = 4*h*phi*(1-phi); phi∈[0,1]."""
+    return 4.0 * hmax * phi * (1.0 - phi)
+
+def slew(prev: float, target: float, rate: float, dt: float) -> float:
+    """Limitador de derivada |dθ/dt| <= rate."""
+    up = prev + rate * dt
+    dn = prev - rate * dt
+    if target > up:  return up
+    if target < dn:  return dn
+    return target
+
+
+# ====== Modelos de parámetros ======
+
+@dataclass
+class GaitParams:
+    # Tiempos
+    freq_hz: float = 0.30          # frecuencia base (alternativa a swing/stance explícitos)
+    swing_time_s: float = 0.45
+    stance_time_s: float = 0.55
+
+    # Amplitudes base
+    hip_swing_boost_rad: float = 0.06   # flexión extra de cadera en swing
+    knee_swing_max_rad: float = 0.24    # pico de rodilla en swing
+    ankle_base_rad: float = 0.00        # base ankle en swing (además de la dorsi media)
+
+    # Clearance / Dorsiflexión
+    foot_clearance_m: float = 0.03
+    dorsi_mid_rad: float = 0.04
+    dorsi_window_a: float = 0.30
+    dorsi_window_b: float = 0.70
+
+    # Limitadores de velocidad
+    knee_vel_max: float = 2.3
+    ankle_vel_max: float = 2.0
+    hip_vel_max: float = 2.0
+
+    # Guardas IMU (además de los del controller, aquí es un refuerzo)
+    imu_pitch_deg_gate: float = 5.0
+    imu_gate_scale: float = 0.7
+
+    # Otros
+    enabled_on_start: bool = False
+    auto_on: bool = False
+
+
+@dataclass
+class JointMap:
+    # Por defecto usamos los nombres que aparecen en tus logs y controller
+    hip_l: str = "j00_hip_pitch_l"
+    knee_l: str = "j03_knee_pitch_l"
+    ankle_l: str = "j04_ankle_pitch_l"
+    hip_r: str = "j06_hip_pitch_r"
+    knee_r: str = "j09_knee_pitch_r"
+    ankle_r: str = "j10_ankle_pitch_r"
+
+
+@dataclass
+class SlewState:
+    prev: Dict[str, float] = field(default_factory=dict)
+
+
+class Phase(Enum):
+    STANCE_L = 0
+    SWING_R  = 1
+    STANCE_R = 2
+    SWING_L  = 3
+
+
+# ====== Walker ======
 
 class Walker:
-    def __init__(self, params, limits, logger=print):
-        self.logger = logger
-        self.limits = limits or {}
+    def __init__(self, params: dict, limits: dict, logger: Optional[Callable[..., None]] = None):
+        self._log = (logger or (lambda *a, **k: None))
 
-        # ---- Config de marcha: acepta params = {...} o params = {"gait": {...}} ----
-        root = params or {}
-        gcfg = root.get("gait", root)
+        # --- Parseo de params.json (sección "gait") ---
+        G = params.get("gait", {}) or {}
 
-        self.enabled = bool(gcfg.get("auto_on", False))
-        self.on = self.enabled
+        # Tiempos
+        freq_hz = float(G.get("freq_hz", 0.30))
+        swing_time_s  = float(G.get("swing_time_s", 0.45))
+        stance_time_s = float(G.get("stance_time_s", 0.55))
+        # Si el usuario sólo dio freq_hz, reparte tiempos básicos
+        if "swing_time_s" not in G and "stance_time_s" not in G:
+            # regla simple: 45/55
+            T = 1.0 / max(1e-6, freq_hz)
+            swing_time_s  = 0.45 * T
+            stance_time_s = 0.55 * T
 
-        # Dirección (solo afecta PITCH)
-        dir_str = (gcfg.get("direction") or "forward").lower()
-        self.dir = 1.0 if dir_str in ("fwd", "forward", "+", "1", "+1") else -1.0
+        step_amp = G.get("step_amp", {})
+        hip_boost = float(step_amp.get("hip_pitch", 0.06))
+        knee_max  = float(step_amp.get("knee_pitch", 0.24))
+        ankle_base = float(step_amp.get("ankle_pitch", 0.00))
 
-        # Frecuencia y arranque suave
-        self.freq_hz = float(gcfg.get("freq_hz", 0.33))
-        self.soft_start_s = float(gcfg.get("soft_start_s", 1.2))
-        self.freq_hz = self._clamp(self.freq_hz, 0.05, 2.0)
-        self.t_since_enable = 0.0
-        self._global_gain = 1.0
+        self.g = GaitParams(
+            freq_hz=freq_hz,
+            swing_time_s=swing_time_s,
+            stance_time_s=stance_time_s,
+            hip_swing_boost_rad=hip_boost,
+            knee_swing_max_rad=knee_max,
+            ankle_base_rad=ankle_base,
+            foot_clearance_m=float(G.get("clearance_m", 0.03)),
+            dorsi_mid_rad=float(G.get("dorsi_mid_rad", 0.04)),
+            dorsi_window_a=float(G.get("dorsi_window", [0.30, 0.70])[0]),
+            dorsi_window_b=float(G.get("dorsi_window", [0.30, 0.70])[1]),
+            knee_vel_max=float(G.get("slew_rad_s", {}).get("knee", 2.3)),
+            ankle_vel_max=float(G.get("slew_rad_s", {}).get("ankle", 2.0)),
+            hip_vel_max=float(G.get("slew_rad_s", {}).get("hip", 2.0)),
+            imu_pitch_deg_gate=float(G.get("imu_pitch_deg_gate", 5.0)),
+            imu_gate_scale=float(G.get("imu_gate_scale", 0.7)),
+            enabled_on_start=bool(G.get("enabled_on_start", False)),
+            auto_on=bool(G.get("auto_on", False)),
+        )
 
-        # Fase
-        ph_off = gcfg.get("phase_offset") or {}
-        self.phase = 0.0
-        self.phase_off_L = float(ph_off.get("L", 0.0))
-        self.phase_off_R = float(ph_off.get("R", math.pi))  # 180° out of phase
+        # Joint map (permitimos override desde params.json -> "joint_map")
+        JM = params.get("joint_map", {}) or {}
+        self.jm = JointMap(
+            hip_l=JM.get("hip_l", JointMap.hip_l),
+            knee_l=JM.get("knee_l", JointMap.knee_l),
+            ankle_l=JM.get("ankle_l", JointMap.ankle_l),
+            hip_r=JM.get("hip_r", JointMap.hip_r),
+            knee_r=JM.get("knee_r", JointMap.knee_r),
+            ankle_r=JM.get("ankle_r", JointMap.ankle_r),
+        )
 
-        # Amplitudes de paso (pitch)
-        step_amp = gcfg.get("step_amp") or {}
-        self.hip_pitch_A   = float(step_amp.get("hip_pitch",   0.13))
-        self.knee_pitch_A  = float(step_amp.get("knee_pitch",  0.20))
-        self.ankle_pitch_A = float(step_amp.get("ankle_pitch", 0.02))  # un poco menor para no rozar clamp
+        # Estado
+        self.on: bool = bool(self.g.enabled_on_start)
+        self._global_gain: float = 1.0  # el controller lo escala con set_global_gain()
+        self.dir: float = +1.0          # +1: forward, -1: backward
 
-        # Amplitudes laterales (roll) — pequeñitas
-        lat_amp = gcfg.get("lateral_amp") or {}
-        self.hip_roll_A    = float(lat_amp.get("hip_roll",   0.00))
-        self.ankle_roll_A  = float(lat_amp.get("ankle_roll", 0.01))
+        self.phase: float = 0.0         # 0..1 dentro de la fase actual
+        self._phase_time: float = 0.0
+        self._phase_dur: float = self.g.stance_time_s  # inicia con STANCE_L
+        self._phase: Phase = Phase.STANCE_L
 
-        # Sesgos estáticos
-        bias = gcfg.get("bias") or {}
-        self.bias_torso_pitch = float(bias.get("torso_pitch", 0.10))  # empuja COM adelante
-        self.bias_ankle_pitch = float(bias.get("ankle_pitch", 0.00))
+        # Slew anterior por joint
+        self._slew = SlewState(prev={
+            self.jm.hip_l: 0.0, self.jm.knee_l: 0.0, self.jm.ankle_l: 0.0,
+            self.jm.hip_r: 0.0, self.jm.knee_r: 0.0, self.jm.ankle_r: 0.0,
+        })
 
-        # Mapeo de nombres de articulaciones (de tu PROTO)
-        self.j = {
-            "L": {
-                "hip_pitch":   "j00_hip_pitch_l",
-                "hip_roll":    "j01_hip_roll_l",
-                "hip_yaw":     "j02_hip_yaw_l",
-                "knee_pitch":  "j03_knee_pitch_l",
-                "ankle_pitch": "j04_ankle_pitch_l",
-                "ankle_roll":  "j05_ankle_roll_l",
-            },
-            "R": {
-                "hip_pitch":   "j06_hip_pitch_r",
-                "hip_roll":    "j07_hip_roll_r",
-                "hip_yaw":     "j08_hip_yaw_r",
-                "knee_pitch":  "j09_knee_pitch_r",
-                "ankle_pitch": "j10_ankle_pitch_r",
-                "ankle_roll":  "j11_ankle_roll_r",
-            },
-        }
+        self._log("Walker init",
+                  f"freq={self.g.freq_hz:.2f}Hz swing={self.g.swing_time_s:.2f}s stance={self.g.stance_time_s:.2f}s",
+                  f"knee_max={self.g.knee_swing_max_rad:.2f} hip_boost={self.g.hip_swing_boost_rad:.2f}",
+                  f"dorsi={self.g.dorsi_mid_rad:.2f} window=[{self.g.dorsi_window_a:.2f},{self.g.dorsi_window_b:.2f}]",
+                  f"clearance={self.g.foot_clearance_m*1000:.0f}mm")
 
-        self.last_phase_logged = -1.0
-
-    # ---------------------------- Utils ----------------------------
-    @staticmethod
-    def _clamp(v, lo, hi):
-        return lo if v < lo else (hi if v > hi else v)
-
-    def _soft_gain(self):
-        """Ramp suave tipo S para arranque."""
-        if self.soft_start_s <= 0:
-            return 1.0
-        x = max(0.0, min(1.0, self.t_since_enable / self.soft_start_s))
-        return x * x * (3.0 - 2.0 * x)
-
-    def set_global_gain(self, g: float):
-        self._global_gain = 0.0 if g < 0 else (1.0 if g > 1.0 else g)
+    # ---------- API usada por el controller ----------
 
     def toggle(self, on: bool):
-        if on and not self.enabled:
-            self.t_since_enable = 0.0
-        self.enabled = on
-        self.on = on
+        """Enciende/Apaga el gait. Cuando está apagado, step() devuelve {}."""
+        self.on = bool(on)
 
-    # ----------------------------- Gait -----------------------------
-    def step(self, dt, imu, _unused):
-        """
-        Genera offsets de marcha (dict joint->offset en rad).
-        - Cadera y rodilla en fase (avance).
-        - Tobillo en contrafase suave (despegue/aterrizaje).
-        - Roll mínimo para evitar recover por lateral.
-        """
-        if not self.enabled:
+    def set_global_gain(self, g: float):
+        """El controller te pasa un gain (0..1) según sus tilt/guards."""
+        self._global_gain = clamp(float(g), 0.0, 1.0)
+
+    # imu: {"pitch": rad, "roll": rad}
+    # sensors: reservado para contacto si lo agregas después
+    def step(self, dt: float, imu: Dict[str, float], sensors: Dict) -> Dict[str, float]:
+        if not self.on:
             return {}
 
-        self.t_since_enable += dt
-        self.phase = (self.phase + math.tau * self.freq_hz * dt) % math.tau
+        # Avance de fase
+        self._phase_time += dt
+        if self._phase_time >= self._phase_dur:
+            self._next_phase()
 
-        # Fases por pierna
-        phiL = self.phase + self.phase_off_L
-        phiR = self.phase + self.phase_off_R
+        # Progresión local 0..1 dentro de la fase
+        self.phase = clamp(self._phase_time / max(1e-6, self._phase_dur), 0.0, 1.0)
 
-        # --- Guardas anti-caída (backfall) ---
-        back_thr = 0.10     # empieza ayuda si pitch < -0.10 rad
-        back_max = 0.30     # saturación de ayuda
-        p = getattr(imu, "pitch", 0.0)
+        # Gate IMU interno (suave, adicional al del controller)
+        imu_pitch_deg = float(imu.get("pitch", 0.0)) * (180.0 / math.pi)
+        amp_scale_imu = 1.0 if abs(imu_pitch_deg) <= self.g.imu_pitch_deg_gate else self.g.imu_gate_scale
 
-        extra_tp = 0.0
-        amp_scale = 1.0
-        if p < -back_thr:
-            d = min(back_max, (-p - back_thr))
-            # empuja el torso más al frente (DC bias en cadera)
-            extra_tp = 0.35 * d          # ~0..0.07 rad típico
-            # baja amplitud de paso para recuperar
-            amp_scale = max(0.5, 1.0 - 1.8 * d)
+        # Ganancia total
+        GAIN = self._global_gain * amp_scale_imu
+        if GAIN <= 1e-6:
+            return {}
 
-        # aplica escala de emergencia a amplitudes
-        HpA   = self.hip_pitch_A   * amp_scale
-        KnA   = self.knee_pitch_A  * amp_scale
-        AnkA  = self.ankle_pitch_A * amp_scale
-        tp_bias = self.bias_torso_pitch + extra_tp
-
-        # Ganancias
-        g = self._soft_gain() * self._global_gain
-        kps = self.dir * (math.pi / 2.0)  # desfase de 90° para la rodilla respecto a cadera
-
-        # --- PITCH (avanza solo con dir) ---
-        hip_pitch_L   = g * self.dir * HpA  * math.sin(phiL) + tp_bias
-        knee_pitch_L  = g * self.dir * KnA  * math.sin(phiL + kps)
-        ankle_pitch_L = g * self.dir * AnkA * math.sin(phiL) + self.bias_ankle_pitch
-
-        hip_pitch_R   = g * self.dir * HpA  * math.sin(phiR) + tp_bias
-        knee_pitch_R  = g * self.dir * KnA  * math.sin(phiR + kps)
-        ankle_pitch_R = g * self.dir * AnkA * math.sin(phiR) + self.bias_ankle_pitch
-
-        # --- ROLL (muy pequeño y sin dir) ---
-        hip_roll_L    = g *              self.hip_roll_A   * math.sin(phiL + math.pi/2)
-        ankle_roll_L  = g *              self.ankle_roll_A * math.sin(phiL)
-        hip_roll_R    = g *              self.hip_roll_A   * math.sin(phiR + math.pi/2)
-        ankle_roll_R  = g *              self.ankle_roll_A * math.sin(phiR)
-
-        out = {
-            self.j["L"]["hip_pitch"]:   hip_pitch_L,
-            self.j["L"]["knee_pitch"]:  knee_pitch_L,
-            self.j["L"]["ankle_pitch"]: ankle_pitch_L,
-            self.j["L"]["hip_roll"]:    hip_roll_L,
-            self.j["L"]["ankle_roll"]:  ankle_roll_L,
-
-            self.j["R"]["hip_pitch"]:   hip_pitch_R,
-            self.j["R"]["knee_pitch"]:  knee_pitch_R,
-            self.j["R"]["ankle_pitch"]: ankle_pitch_R,
-            self.j["R"]["hip_roll"]:    hip_roll_R,
-            self.j["R"]["ankle_roll"]:  ankle_roll_R,
+        # Construir consignas
+        cmd: Dict[str, float] = {
+            self.jm.hip_l: 0.0, self.jm.knee_l: 0.0, self.jm.ankle_l: 0.0,
+            self.jm.hip_r: 0.0, self.jm.knee_r: 0.0, self.jm.ankle_r: 0.0,
         }
 
-        # Log compacto cada ~0.25 rad
-        if self.last_phase_logged < 0 or abs(self.phase - self.last_phase_logged) > 0.25:
-            self.logger(
-                f"[gait] phase={self.phase:.2f} Δ={len(out)} joints | "
-                f"A(hp,kn,ap)={self.hip_pitch_A:.2f},{self.knee_pitch_A:.2f},{self.ankle_pitch_A:.2f} "
-                f"bias(tp,ap)={self.bias_torso_pitch:.2f},{self.bias_ankle_pitch:.2f} "
-                f"g={self._global_gain:.2f}"
-            )
-            self.last_phase_logged = self.phase
+        # Selecciona pierna en swing según fase
+        if self._phase == Phase.SWING_L:
+            self._apply_swing_left(cmd, self.phase, GAIN, dt)
+        elif self._phase == Phase.SWING_R:
+            self._apply_swing_right(cmd, self.phase, GAIN, dt)
+        else:
+            # STANCE_*: podrías añadir pequeños ajustes si lo deseas
+            pass
 
-        # Clamps por articulación con margen seguro
-        def _lim(name, val):
-            lim = (self.limits.get(name) or {})
-            lo, hi = lim.get("min", -9), lim.get("max", 9)
-            return self._clamp(val, lo, hi)
+        return cmd
 
-        out[self.j["L"]["hip_pitch"]]   = _lim("hip_pitch_cmd",   out[self.j["L"]["hip_pitch"]])
-        out[self.j["L"]["knee_pitch"]]  = _lim("knee_pitch_cmd",  out[self.j["L"]["knee_pitch"]])
-        out[self.j["L"]["ankle_pitch"]] = _lim("ankle_pitch_cmd", out[self.j["L"]["ankle_pitch"]])
+    # ---------- Internos ----------
 
-        out[self.j["R"]["hip_pitch"]]   = _lim("hip_pitch_cmd",   out[self.j["R"]["hip_pitch"]])
-        out[self.j["R"]["knee_pitch"]]  = _lim("knee_pitch_cmd",  out[self.j["R"]["knee_pitch"]])
-        out[self.j["R"]["ankle_pitch"]] = _lim("ankle_pitch_cmd", out[self.j["R"]["ankle_pitch"]])
+    def _next_phase(self):
+        # Ciclo: STANCE_L → SWING_R → STANCE_R → SWING_L → ...
+        if self._phase == Phase.STANCE_L:
+            self._phase = Phase.SWING_R
+            self._phase_dur = self.g.swing_time_s
+        elif self._phase == Phase.SWING_R:
+            self._phase = Phase.STANCE_R
+            self._phase_dur = self.g.stance_time_s
+        elif self._phase == Phase.STANCE_R:
+            self._phase = Phase.SWING_L
+            self._phase_dur = self.g.swing_time_s
+        else:
+            self._phase = Phase.STANCE_L
+            self._phase_dur = self.g.stance_time_s
 
-        return out
+        self._phase_time = 0.0
 
-    # Alias para compat con el controller
-    def update(self, dt, imu, cmds):
-        return self.step(dt, imu, cmds)
+    def _apply_swing_left(self, cmd: Dict[str, float], phi: float, gain: float, dt: float):
+        g = self.g
+        # cadera: boost en swing (dirección no invierte el boost; la direcc. afecta avance/retorno del paso)
+        hip_target   = gain * g.hip_swing_boost_rad
+        # rodilla: senoide 0..π → 0..1..0
+        knee_target  = gain * g.knee_swing_max_rad * math.sin(math.pi * phi)
+        # tobillo: base + dorsiflexión en mitad de swing
+        ankle_target = gain * (g.ankle_base_rad + g.dorsi_mid_rad * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b))
+
+        # (IK opcional) z objetivo del pie
+        _z_clear = foot_height(phi, g.foot_clearance_m)  # disponible si luego lo conectas a IK
+
+        # Slew
+        cmd[self.jm.hip_l]   = slew(self._slew.prev[self.jm.hip_l],   hip_target,   g.hip_vel_max,   dt)
+        cmd[self.jm.knee_l]  = slew(self._slew.prev[self.jm.knee_l],  knee_target,  g.knee_vel_max,  dt)
+        cmd[self.jm.ankle_l] = slew(self._slew.prev[self.jm.ankle_l], ankle_target, g.ankle_vel_max, dt)
+
+        # Guardar previos
+        self._slew.prev[self.jm.hip_l]   = cmd[self.jm.hip_l]
+        self._slew.prev[self.jm.knee_l]  = cmd[self.jm.knee_l]
+        self._slew.prev[self.jm.ankle_l] = cmd[self.jm.ankle_l]
+
+        # Pierna contraria (stance) podría llevar un micro-contrapeso si se necesita
+        # (lo dejamos en 0 para que tu BalanceController lleve la batuta)
+
+    def _apply_swing_right(self, cmd: Dict[str, float], phi: float, gain: float, dt: float):
+        g = self.g
+        hip_target   = gain * g.hip_swing_boost_rad
+        knee_target  = gain * g.knee_swing_max_rad * math.sin(math.pi * phi)
+        ankle_target = gain * (g.ankle_base_rad + g.dorsi_mid_rad * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b))
+
+        _z_clear = foot_height(phi, g.foot_clearance_m)
+
+        cmd[self.jm.hip_r]   = slew(self._slew.prev[self.jm.hip_r],   hip_target,   g.hip_vel_max,   dt)
+        cmd[self.jm.knee_r]  = slew(self._slew.prev[self.jm.knee_r],  knee_target,  g.knee_vel_max,  dt)
+        cmd[self.jm.ankle_r] = slew(self._slew.prev[self.jm.ankle_r], ankle_target, g.ankle_vel_max, dt)
+
+        self._slew.prev[self.jm.hip_r]   = cmd[self.jm.hip_r]
+        self._slew.prev[self.jm.knee_r]  = cmd[self.jm.knee_r]
+        self._slew.prev[self.jm.ankle_r] = cmd[self.jm.ankle_r]

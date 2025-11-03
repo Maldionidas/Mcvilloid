@@ -21,8 +21,8 @@
   "limits": {
     "ankle_pos": 0.21,
     "ankle_vel": 1.0,
-    "hip_pos":   0.42,
-    "hip_vel":   2.0,
+    "hip_pos":   0.26,
+    "hip_vel":   1.8,
     "hip_roll_pos": 0.40
   },
 
@@ -80,15 +80,15 @@
   "gait": {
     "enabled_on_start": false,
     "auto_on": false,
-    "freq_hz": 0.30,
+    "freq_hz": 0.80,
     "soft_start_s": 0.6,
     "phase_offset": { "L": 0.0, "R": 3.1415926 },
     "direction": "forward",
 
     "step_amp": {
-      "hip_pitch":   0.13,
-      "knee_pitch":  0.20,
-      "ankle_pitch": 0.03
+      "hip_pitch":   0.07,
+      "knee_pitch":  0.24,
+      "ankle_pitch": 0.06
     },
     "lateral_amp": {
       "hip_roll":   0.010,
@@ -97,6 +97,14 @@
     "bias": {
       "torso_pitch": 0.08, 
       "ankle_pitch": 0.00
+    },
+    "clearance_m": 0.045,      
+      "dorsi_mid_rad": 0.05,   
+      "dorsi_window": [0.25, 0.75],
+      "slew_rad_s": {            
+        "knee":  2.3,
+        "ankle": 2.0,
+        "hip":   2.0
     },
 
     "limits": {
