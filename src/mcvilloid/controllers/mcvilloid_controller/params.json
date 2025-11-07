@@ -10,20 +10,21 @@
   "i_limit_deg": 8.0,
 
   "mix": {
-    "pitch_to_ankle": 0.5,
-    "roll_to_ankle":  0.90,
-    "roll_to_hip":    0.40
+    "pitch_to_ankle": -0.22,
+    "roll_to_ankle":  0.70,
+    "roll_to_hip":    0.55
   },
 
   "deadband_deg": 0.4,
   "soft_start_s": 3.0,
 
   "limits": {
-    "ankle_pos": 0.21,
+    "ankle_pos": 0.22,
     "ankle_vel": 1.0,
-    "hip_pos":   0.26,
-    "hip_vel":   1.8,
-    "hip_roll_pos": 0.40
+    "hip_pos":   2.50,
+    "hip_vel":   2.4,
+    "hip_roll_pos": 0.40,
+    "knee_pos": 1.20
   },
 
   "signs": { "invert_pitch": false, "invert_roll": true },
@@ -80,40 +81,70 @@
   "gait": {
     "enabled_on_start": false,
     "auto_on": false,
-    "freq_hz": 0.80,
-    "soft_start_s": 0.6,
+    "freq_hz": 0.82,
+    "soft_start_s": 0.9,
     "phase_offset": { "L": 0.0, "R": 3.1415926 },
     "direction": "forward",
 
     "step_amp": {
-      "hip_pitch":   0.07,
-      "knee_pitch":  0.24,
-      "ankle_pitch": 0.06
+      "hip_pitch":   0.42,
+      "knee_pitch":  0.40,
+      "ankle_pitch": 0.040
     },
     "lateral_amp": {
-      "hip_roll":   0.010,
-      "ankle_roll": 0.010
+      "hip_roll":   0.018,
+      "ankle_roll": 0.006
     },
     "bias": {
-      "torso_pitch": 0.08, 
-      "ankle_pitch": 0.00
+      "torso_pitch": 0.10, 
+      "ankle_pitch": 0.00,
+      "torso_hip_pitch": -0.065,  
+      "ankle_dorsi":     0.0
     },
-    "clearance_m": 0.045,      
-      "dorsi_mid_rad": 0.05,   
-      "dorsi_window": [0.25, 0.75],
-      "slew_rad_s": {            
-        "knee":  2.3,
-        "ankle": 2.0,
-        "hip":   2.0
+    "clearance_m": 0.046,      
+    "dorsi_mid_rad": 0.038,   
+    "dorsi_window": [0.38, 0.58],
+    "lateral_shift_rad": 0.080,
+    "stride_base": 0.98,
+    "stride_max":  1.25,
+    "slew_rad_s": {            
+        "knee":  4.8,
+        "ankle": 2.6,
+        "hip":   3.4
+    },
+    "imu_pitch_deg_gate": 180,
+    "imu_gate_scale": 1.0,
+    "limits": {
+      "hip_pitch_cmd":   { "min": -0.60, "max": 0.60 },
+      "knee_pitch_cmd":  { "min": -0.55, "max": 0.55 },
+      "ankle_pitch_cmd": { "min": -0.07, "max": 0.07 },
+      "ankle_roll_cmd":  { "min": -0.10, "max": 0.10 }  
+    },
+    "phase": {
+      "duty_factor": 0.58,   
+      "swing_up_ratio": 0.42, 
+      "toe_off_ratio": 0.22,  
+      "heel_strike_hold": 0.12   
     },
 
-    "limits": {
-      "hip_pitch_cmd":   { "min": -0.30, "max": 0.30 },
-      "knee_pitch_cmd":  { "min": -0.30, "max": 0.30 },
-      "ankle_pitch_cmd": { "min": -0.17, "max": 0.17 },
-      "ankle_roll_cmd":  { "min": -0.12, "max": 0.12 }  
-    }
+  "guards": {
+    "pitch_ok_rad": 0.06,     
+    "pitch_stop_rad": 0.14,   
+    "roll_stop_rad":  0.35
   },
+
+  "scheduling": {
+    "ankle_k_scale_early": 0.7,  
+    "hip_k_scale_swing":   1.10, 
+    "knee_k_scale_swing":  1.0
+  },
+
+  "ramp": {
+    "first_cycles_limit_amp": true,
+    "cycles": 3,               
+    "scale": 0.80              
+  }
+},
 
   "logging": {
     "enabled": true,

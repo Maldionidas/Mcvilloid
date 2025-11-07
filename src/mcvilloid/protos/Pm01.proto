@@ -47,6 +47,8 @@ PROTO Pm01 [
         jointParameters HingeJointParameters {
           axis 0.000000 0.965930 -0.258820
           anchor 0.015410 0.076141 -0.061208
+          minStop -2.50
+          maxStop 2.50
         }
         device [
           RotationalMotor {
@@ -136,6 +138,8 @@ PROTO Pm01 [
                           jointParameters HingeJointParameters {
                             axis 0.000000 1.000000 0.000000
                             anchor -0.026020 -0.000029 -0.236550
+                            minStop -0.10
+                            maxStop 0.70
                           }
                           device [
                             RotationalMotor {
@@ -316,6 +320,8 @@ PROTO Pm01 [
         jointParameters HingeJointParameters {
           axis 0.000000 0.965930 0.258820
           anchor 0.015410 -0.076141 -0.061208
+          minStop -2.50
+          maxStop 2.50
         }
         device [
           RotationalMotor {
@@ -405,6 +411,8 @@ PROTO Pm01 [
                           jointParameters HingeJointParameters {
                             axis 0.000000 1.000000 0.000000
                             anchor -0.026020 0.000029 -0.236550
+                            minStop -0.10
+                            maxStop 0.70
                           }
                           device [
                             RotationalMotor {

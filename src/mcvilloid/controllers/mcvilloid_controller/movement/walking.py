@@ -54,6 +54,20 @@ def slew(prev: float, target: float, rate: float, dt: float) -> float:
     if target > up:  return up
     if target < dn:  return dn
     return target
+# Ganancias sencillas para la pierna en apoyo (stance)
+STANCE_HIP_COEFF = 0.4     # cadera en apoyo ≈ -0.8 * hip_swing
+TOEOFF_ANKLE_RAD = 0.035   # empuje plantar en apoyo (rad)
+TOEOFF_WIN_L = (0.35, 0.75)  # ventana de toe-off cuando la otra pierna está en SWING_L
+TOEOFF_WIN_R = (0.35, 0.75)  # ventana de toe-off cuando la otra pierna está en SWING_R
+
+def bell01(x, a, b):
+    if x < a or x > b: return 0.0
+    t = (x - a) / max(1e-6, (b - a))
+    return 4.0 * t * (1.0 - t)
+
+def in_window(x, a, b):
+    return 0.0 if (x < a or x > b) else (x - a) / max(1e-6, (b - a))
+
 
 
 # ====== Modelos de parámetros ======
@@ -184,6 +198,18 @@ class Walker:
             self.jm.hip_l: 0.0, self.jm.knee_l: 0.0, self.jm.ankle_l: 0.0,
             self.jm.hip_r: 0.0, self.jm.knee_r: 0.0, self.jm.ankle_r: 0.0,
         })
+                # --- Signos por joint (desde params.json -> "joint_signs") ---
+        JS = (params.get("joint_signs") or {})
+        self.signs = {
+            self.jm.hip_l:   float(JS.get("hip_pitch_l",   1.0)),
+            self.jm.knee_l:  float(JS.get("knee_pitch_l",  1.0)),
+            self.jm.ankle_l: float(JS.get("ankle_pitch_l", 1.0)),  # usamos solo pitch en tobillo
+            self.jm.hip_r:   float(JS.get("hip_pitch_r",   1.0)),
+            self.jm.knee_r:  float(JS.get("knee_pitch_r",  1.0)),
+            self.jm.ankle_r: float(JS.get("ankle_pitch_r", 1.0)),
+        }
+        self._log("Walker signs/dir", f"dir0={self.dir} signs={self.signs}")
+
 
         self._log("Walker init",
                   f"freq={self.g.freq_hz:.2f}Hz swing={self.g.swing_time_s:.2f}s stance={self.g.stance_time_s:.2f}s",
@@ -277,10 +303,34 @@ class Walker:
         cmd[self.jm.knee_l]  = slew(self._slew.prev[self.jm.knee_l],  knee_target,  g.knee_vel_max,  dt)
         cmd[self.jm.ankle_l] = slew(self._slew.prev[self.jm.ankle_l], ankle_target, g.ankle_vel_max, dt)
 
+                # --- Pierna de apoyo (derecha): igual y opuesto en cadera + toe-off de tobillo ---
+        w = bell01(phi, 0.25, 0.85)         
+        stance_hip = -STANCE_HIP_COEFF * hip_target * w
+        cmd[self.jm.hip_r] = slew(self._slew.prev[self.jm.hip_r], stance_hip, g.hip_vel_max, dt)
+        self._slew.prev[self.jm.hip_r] = cmd[self.jm.hip_r]
+
+        # Toe-off suave al final del swing de la pierna opuesta
+        toe_w = in_window(phi, *TOEOFF_WIN_L)  # 0..1 en ventana final
+        if toe_w > 0.0:
+            toe = gain * TOEOFF_ANKLE_RAD * toe_w
+            # plantarflexión = signo negativo en pitch (hacia abajo)
+            toe_cmd = slew(self._slew.prev[self.jm.ankle_r], -toe, g.ankle_vel_max, dt)
+            cmd[self.jm.ankle_r] = toe_cmd
+            self._slew.prev[self.jm.ankle_r] = toe_cmd
+
         # Guardar previos
         self._slew.prev[self.jm.hip_l]   = cmd[self.jm.hip_l]
         self._slew.prev[self.jm.knee_l]  = cmd[self.jm.knee_l]
         self._slew.prev[self.jm.ankle_l] = cmd[self.jm.ankle_l]
+
+                # Aplicar signos de hardware
+        cmd[self.jm.hip_l]   *= self.signs[self.jm.hip_l]
+        cmd[self.jm.knee_l]  *= self.signs[self.jm.knee_l]
+        cmd[self.jm.ankle_l] *= self.signs[self.jm.ankle_l]
+        cmd[self.jm.hip_r]   *= self.signs[self.jm.hip_r]
+        if self.jm.ankle_r in cmd:
+            cmd[self.jm.ankle_r] *= self.signs[self.jm.ankle_r]
+
 
         # Pierna contraria (stance) podría llevar un micro-contrapeso si se necesita
         # (lo dejamos en 0 para que tu BalanceController lleve la batuta)
@@ -297,6 +347,28 @@ class Walker:
         cmd[self.jm.knee_r]  = slew(self._slew.prev[self.jm.knee_r],  knee_target,  g.knee_vel_max,  dt)
         cmd[self.jm.ankle_r] = slew(self._slew.prev[self.jm.ankle_r], ankle_target, g.ankle_vel_max, dt)
 
+                # --- Pierna de apoyo (izquierda): igual y opuesto en cadera + toe-off ---
+        w = bell01(phi, 0.25, 0.85)
+        stance_hip = -STANCE_HIP_COEFF * hip_target * w
+        cmd[self.jm.hip_l] = slew(self._slew.prev[self.jm.hip_l], stance_hip, g.hip_vel_max, dt)
+        self._slew.prev[self.jm.hip_l] = cmd[self.jm.hip_l]
+
+        toe_w = in_window(phi, *TOEOFF_WIN_R)
+        if toe_w > 0.0:
+            toe = gain * TOEOFF_ANKLE_RAD * toe_w
+            toe_cmd = slew(self._slew.prev[self.jm.ankle_l], -toe, g.ankle_vel_max, dt)
+            cmd[self.jm.ankle_l] = toe_cmd
+            self._slew.prev[self.jm.ankle_l] = toe_cmd
+
+
         self._slew.prev[self.jm.hip_r]   = cmd[self.jm.hip_r]
         self._slew.prev[self.jm.knee_r]  = cmd[self.jm.knee_r]
         self._slew.prev[self.jm.ankle_r] = cmd[self.jm.ankle_r]
+
+                # Aplicar signos de hardware
+        cmd[self.jm.hip_r]   *= self.signs[self.jm.hip_r]
+        cmd[self.jm.knee_r]  *= self.signs[self.jm.knee_r]
+        cmd[self.jm.ankle_r] *= self.signs[self.jm.ankle_r]
+        cmd[self.jm.hip_l]   *= self.signs[self.jm.hip_l]
+        if self.jm.ankle_l in cmd:
+            cmd[self.jm.ankle_l] *= self.signs[self.jm.ankle_l]
