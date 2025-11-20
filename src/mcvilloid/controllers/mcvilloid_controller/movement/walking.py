@@ -7,6 +7,7 @@ Walker (FSM) para PM01
 - Métodos usados por tu controller:
     - toggle(on: bool)
     - set_global_gain(g: float)
+    - set_stride_base(s: float)
     - step(dt: float, imu: dict, sensors: dict) -> Dict[str, float]
 - Atributos que lees en logs:
     - .on (bool)
@@ -20,7 +21,7 @@ Características:
 - Dorsiflexión en mitad de swing (dorsi_mid_rad, ventana [a,b])
 - Trayectoria de pie parabólica (clearance_m) — usada para referencia (IK opcional)
 - Limitadores de velocidad (slew) anti-“patada”
-- Gate de estabilidad por IMU (reduce amplitudes si tilt)
+- Gate de estabilidad por IMU (reduce amplitudes si tilt) con histéresis
 - FSM interna con cuatro fases: STANCE_L → SWING_R → STANCE_R → SWING_L
 """
 
@@ -54,11 +55,20 @@ def slew(prev: float, target: float, rate: float, dt: float) -> float:
     if target > up:  return up
     if target < dn:  return dn
     return target
-# Ganancias sencillas para la pierna en apoyo (stance)
-STANCE_HIP_COEFF = 0.4     # cadera en apoyo ≈ -0.8 * hip_swing
-TOEOFF_ANKLE_RAD = 0.035   # empuje plantar en apoyo (rad)
-TOEOFF_WIN_L = (0.35, 0.75)  # ventana de toe-off cuando la otra pierna está en SWING_L
-TOEOFF_WIN_R = (0.35, 0.75)  # ventana de toe-off cuando la otra pierna está en SWING_R
+
+# Ganancias sencillas para la pierna en apoyo (stance) y toe-off
+STANCE_HIP_COEFF = 0.25      # cadera en apoyo ≈ +0.25 * hip_swing (opuesto al swing)
+TOEOFF_ANKLE_RAD = 0.050     # empuje plantar en apoyo (rad)
+TOEOFF_WIN_L = (0.85, 0.98)  # ventana de toe-off cuando la otra pierna está en SWING_L (ajustada)
+TOEOFF_WIN_R = (0.85, 0.98)  # ventana de toe-off cuando la otra pierna está en SWING_R (ajustada)
+
+# Bias de cadera hacia adelante (suaviza inicio de paso)
+HIP_WALK_FWD_BIAS_RAD = 0.03
+
+# Gate de IMU con histéresis
+IMU_GATE_ON_DEG  = 8.0    # entra a modo recortado si |pitch| > 8°
+IMU_GATE_OFF_DEG = 6.0    # sale cuando |pitch| < 6°
+
 
 def bell01(x, a, b):
     if x < a or x > b: return 0.0
@@ -67,7 +77,6 @@ def bell01(x, a, b):
 
 def in_window(x, a, b):
     return 0.0 if (x < a or x > b) else (x - a) / max(1e-6, (b - a))
-
 
 
 # ====== Modelos de parámetros ======
@@ -135,6 +144,15 @@ class Walker:
 
         # --- Parseo de params.json (sección "gait") ---
         G = params.get("gait", {}) or {}
+        self.Gfull = dict(G)  # copia segura de params["gait"]
+        if not isinstance(self.Gfull.get("limits"), dict):
+            self.Gfull["limits"] = {}
+
+
+        # --- Ganancia extra de rodilla y tobillo en swing (altura de paso) ---
+        self._knee_gain  = float(G.get("knee_swing_gain", 1.5))   # 1.5x por defecto
+        self._ankle_gain = float(G.get("ankle_swing_gain", 1.2))  # un pelín más de dorsi
+
 
         # Tiempos
         freq_hz = float(G.get("freq_hz", 0.30))
@@ -149,7 +167,7 @@ class Walker:
 
         step_amp = G.get("step_amp", {})
         hip_boost = float(step_amp.get("hip_pitch", 0.06))
-        knee_max  = float(step_amp.get("knee_pitch", 0.24))
+        knee_max  = float(step_amp.get("knee_pitch", 0.30))
         ankle_base = float(step_amp.get("ankle_pitch", 0.00))
 
         self.g = GaitParams(
@@ -157,20 +175,26 @@ class Walker:
             swing_time_s=swing_time_s,
             stance_time_s=stance_time_s,
             hip_swing_boost_rad=hip_boost,
-            knee_swing_max_rad=knee_max,
+            knee_swing_max_rad=float(G.get("step_amp", {}).get("knee_pitch", knee_max)),
+            knee_vel_max=float(G.get("slew_rad_s", {}).get("knee", 1.8)),  # antes 2.3
             ankle_base_rad=ankle_base,
             foot_clearance_m=float(G.get("clearance_m", 0.03)),
             dorsi_mid_rad=float(G.get("dorsi_mid_rad", 0.04)),
             dorsi_window_a=float(G.get("dorsi_window", [0.30, 0.70])[0]),
             dorsi_window_b=float(G.get("dorsi_window", [0.30, 0.70])[1]),
-            knee_vel_max=float(G.get("slew_rad_s", {}).get("knee", 2.3)),
-            ankle_vel_max=float(G.get("slew_rad_s", {}).get("ankle", 2.0)),
+            ankle_vel_max=float(G.get("slew_rad_s", {}).get("ankle", 2.3)),
             hip_vel_max=float(G.get("slew_rad_s", {}).get("hip", 2.0)),
             imu_pitch_deg_gate=float(G.get("imu_pitch_deg_gate", 5.0)),
             imu_gate_scale=float(G.get("imu_gate_scale", 0.7)),
             enabled_on_start=bool(G.get("enabled_on_start", False)),
             auto_on=bool(G.get("auto_on", False)),
         )
+                # --- Ganancia extra de altura de paso (rodilla/tobillo en swing) ---
+        # Puedes ajustar desde params.json con:
+        #   "knee_swing_gain": 2.0, "ankle_swing_gain": 1.5
+        self._knee_gain  = float(G.get("knee_swing_gain", 2.0))
+        self._ankle_gain = float(G.get("ankle_swing_gain", 1.5))
+
 
         # Joint map (permitimos override desde params.json -> "joint_map")
         JM = params.get("joint_map", {}) or {}
@@ -185,10 +209,18 @@ class Walker:
 
         # Estado
         self.on: bool = bool(self.g.enabled_on_start)
-        self._global_gain: float = 1.0  # el controller lo escala con set_global_gain()
-        self.dir: float = +1.0          # +1: forward, -1: backward
+        self._global_gain: float = 1.0          # gain actual (suavizado)
+        self._global_gain_target: float = 1.0   # gain objetivo
+        self._gain_slew_rad_s: float = 1.5      # rapidez de cambio del gain
+        self.dir: float = +1.0                  # +1: forward, -1: backward
 
-        self.phase: float = 0.0         # 0..1 dentro de la fase actual
+        self.phase: float = 0.0                 # 0..1 dentro de la fase actual
+
+        # --- Escala de zancada (stride) ---
+        Gfull = (params.get("gait", {}) or {})
+        self.stride_base: float = float(Gfull.get("stride_base", 1.20))
+        self._stride_max_param: float = float(Gfull.get("stride_max", 1.35))
+        self._stride_min_param: float = 0.60
         self._phase_time: float = 0.0
         self._phase_dur: float = self.g.stance_time_s  # inicia con STANCE_L
         self._phase: Phase = Phase.STANCE_L
@@ -198,7 +230,8 @@ class Walker:
             self.jm.hip_l: 0.0, self.jm.knee_l: 0.0, self.jm.ankle_l: 0.0,
             self.jm.hip_r: 0.0, self.jm.knee_r: 0.0, self.jm.ankle_r: 0.0,
         })
-                # --- Signos por joint (desde params.json -> "joint_signs") ---
+
+        # --- Signos por joint (desde params.json -> "joint_signs") ---
         JS = (params.get("joint_signs") or {})
         self.signs = {
             self.jm.hip_l:   float(JS.get("hip_pitch_l",   1.0)),
@@ -210,28 +243,55 @@ class Walker:
         }
         self._log("Walker signs/dir", f"dir0={self.dir} signs={self.signs}")
 
-
         self._log("Walker init",
                   f"freq={self.g.freq_hz:.2f}Hz swing={self.g.swing_time_s:.2f}s stance={self.g.stance_time_s:.2f}s",
                   f"knee_max={self.g.knee_swing_max_rad:.2f} hip_boost={self.g.hip_swing_boost_rad:.2f}",
                   f"dorsi={self.g.dorsi_mid_rad:.2f} window=[{self.g.dorsi_window_a:.2f},{self.g.dorsi_window_b:.2f}]",
                   f"clearance={self.g.foot_clearance_m*1000:.0f}mm")
 
+        # Estados para toe-off edge-trigger
+        self._toe_w_prev_L = 0.0
+        self._toe_w_prev_R = 0.0
+        # Refractario para toe-off (evita doble impulso por ciclo)
+        self._toe_refrac_s = 0.30
+        self._toe_timer = 0.0
+        # Umbrales auxiliares
+        self._knee_late_swing_rad = 0.22   # dispara toe-off sólo si la rodilla de la pierna en swing ya va alta
+        self._max_roll_deg_for_toe = 10.0  # no toe-off si hay roll fuerte
+
+        # Estado del gate de IMU (escala de amplitud suavizada)
+        self._imu_amp_scale = 1.0
+
     # ---------- API usada por el controller ----------
 
     def toggle(self, on: bool):
         """Enciende/Apaga el gait. Cuando está apagado, step() devuelve {}."""
         self.on = bool(on)
+        if not self.on:
+            # matar cualquier resto de amplitud para que el log muestre 0.00
+            self._global_gain_target = 0.0
+            self._global_gain = 0.0
 
     def set_global_gain(self, g: float):
         """El controller te pasa un gain (0..1) según sus tilt/guards."""
-        self._global_gain = clamp(float(g), 0.0, 1.0)
+        self._global_gain_target = clamp(float(g), 0.0, 1.0)
 
+    def set_stride_base(self, s: float):
+        """Ajusta el multiplicador de zancada y loguea el nuevo valor."""
+        self.stride_base = clamp(float(s), self._stride_min_param, self._stride_max_param)
+        self._log("gait", f"[STRIDE] base set -> {self.stride_base:.2f}")
+        
     # imu: {"pitch": rad, "roll": rad}
     # sensors: reservado para contacto si lo agregas después
     def step(self, dt: float, imu: Dict[str, float], sensors: Dict) -> Dict[str, float]:
         if not self.on:
             return {}
+
+        self._imu_pitch = float(imu.get("pitch", 0.0))
+        self._imu_roll  = float(imu.get("roll", 0.0))
+
+        if self._toe_timer > 0.0:
+            self._toe_timer = max(0.0, self._toe_timer - dt)
 
         # Avance de fase
         self._phase_time += dt
@@ -241,12 +301,23 @@ class Walker:
         # Progresión local 0..1 dentro de la fase
         self.phase = clamp(self._phase_time / max(1e-6, self._phase_dur), 0.0, 1.0)
 
-        # Gate IMU interno (suave, adicional al del controller)
-        imu_pitch_deg = float(imu.get("pitch", 0.0)) * (180.0 / math.pi)
-        amp_scale_imu = 1.0 if abs(imu_pitch_deg) <= self.g.imu_pitch_deg_gate else self.g.imu_gate_scale
+        # 1) Slew del gain global (evita escalones de amplitud en mitad de paso)
+        self._global_gain = slew(self._global_gain, self._global_gain_target, self._gain_slew_rad_s, dt)
 
-        # Ganancia total
-        GAIN = self._global_gain * amp_scale_imu
+        # 2) Gate IMU con histéresis + suavizado
+        imu_pitch_deg = self._imu_pitch * (180.0 / math.pi)
+        if abs(imu_pitch_deg) > IMU_GATE_ON_DEG:
+            target_scale = self.g.imu_gate_scale  # p.ej. 0.7
+        elif abs(imu_pitch_deg) < IMU_GATE_OFF_DEG:
+            target_scale = 1.0
+        else:
+            target_scale = self._imu_amp_scale  # mantener durante zona muerta (histéresis)
+
+        # Exponencial suave (no escalones bruscos)
+        self._imu_amp_scale = 0.85 * self._imu_amp_scale + 0.15 * target_scale
+
+        # 3) Ganancia total
+        GAIN = self._global_gain * self._imu_amp_scale
         if GAIN <= 1e-6:
             return {}
 
@@ -262,10 +333,36 @@ class Walker:
         elif self._phase == Phase.SWING_R:
             self._apply_swing_right(cmd, self.phase, GAIN, dt)
         else:
-            # STANCE_*: podrías añadir pequeños ajustes si lo deseas
+            # STANCE_*: ajustes opcionales
             pass
 
+        # -- Clamps intra-Walker con límites de gait.limits.*_cmd (si existen) --
+        GLIM = (self.Gfull.get("limits") or {})
+        hip_min,  hip_max  = (GLIM.get("hip_pitch_cmd")   or {}).get("min", -1e9), (GLIM.get("hip_pitch_cmd")   or {}).get("max", +1e9)
+        knee_min, knee_max = (GLIM.get("knee_pitch_cmd")  or {}).get("min", -1e9), (GLIM.get("knee_pitch_cmd")  or {}).get("max", +1e9)
+        ankp_min, ankp_max = (GLIM.get("ankle_pitch_cmd") or {}).get("min", -1e9), (GLIM.get("ankle_pitch_cmd") or {}).get("max", +1e9)
+        ankr_min, ankr_max = (GLIM.get("ankle_roll_cmd")  or {}).get("min", -1e9), (GLIM.get("ankle_roll_cmd")  or {}).get("max", +1e9)
+        def _cl(v, lo, hi): return hi if v>hi else lo if v<lo else v
+        # -- Clamps intra-Walker con límites de gait.limits.*_cmd (si existen)
+        GLIM = {}  # (no dependas de params externos)
+        hip_min,  hip_max  = -0.22, +0.22
+        knee_min, knee_max = -0.05, +0.60   # ← deja subir rodilla hasta ~23°
+        ankp_min, ankp_max = -0.20, +0.20   # ← un poco más de rango en tobillo
+
+        def _cl(v, lo, hi): return hi if v>hi else lo if v<lo else v
+        
+        for j in list(cmd.keys()):
+            if j in (self.jm.hip_l, self.jm.hip_r):
+                cmd[j] = _cl(cmd[j], hip_min, hip_max)
+            elif j in (self.jm.knee_l, self.jm.knee_r):
+                cmd[j] = _cl(cmd[j], knee_min, knee_max)
+            elif j in (self.jm.ankle_l, self.jm.ankle_r):
+                cmd[j] = _cl(cmd[j], ankp_min, ankp_max)
+        
         return cmd
+
+        
+
 
     # ---------- Internos ----------
 
@@ -285,90 +382,139 @@ class Walker:
             self._phase_dur = self.g.stance_time_s
 
         self._phase_time = 0.0
+        # Limpia detectores de borde y evita toe-off inmediato al cambio de fase
+        self._toe_w_prev_L = 0.0
+        self._toe_w_prev_R = 0.0
 
     def _apply_swing_left(self, cmd: Dict[str, float], phi: float, gain: float, dt: float):
         g = self.g
-        # cadera: boost en swing (dirección no invierte el boost; la direcc. afecta avance/retorno del paso)
-        hip_target   = gain * g.hip_swing_boost_rad
-        # rodilla: senoide 0..π → 0..1..0
-        knee_target  = gain * g.knee_swing_max_rad * math.sin(math.pi * phi)
-        # tobillo: base + dorsiflexión en mitad de swing
-        ankle_target = gain * (g.ankle_base_rad + g.dorsi_mid_rad * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b))
+        hip_target   = gain * g.hip_swing_boost_rad * self.stride_base
+        hip_target  += gain * HIP_WALK_FWD_BIAS_RAD
+        # Escala de swing (altura de paso)
+        s = math.sin(math.pi * phi)   # 0..1..0 en la fase de swing
+        if s < 0.0:
+            s = 0.0
 
-        # (IK opcional) z objetivo del pie
-        _z_clear = foot_height(phi, g.foot_clearance_m)  # disponible si luego lo conectas a IK
+        amp = gain * self.stride_base
 
-        # Slew
+        knee_target  = (amp * self._knee_gain
+                        * g.knee_swing_max_rad * s)
+
+        ankle_target = amp * (
+            g.ankle_base_rad
+            + self._ankle_gain * g.dorsi_mid_rad
+              * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b)
+        )
+
+
+        # Slew (pierna en swing)
         cmd[self.jm.hip_l]   = slew(self._slew.prev[self.jm.hip_l],   hip_target,   g.hip_vel_max,   dt)
         cmd[self.jm.knee_l]  = slew(self._slew.prev[self.jm.knee_l],  knee_target,  g.knee_vel_max,  dt)
         cmd[self.jm.ankle_l] = slew(self._slew.prev[self.jm.ankle_l], ankle_target, g.ankle_vel_max, dt)
 
-                # --- Pierna de apoyo (derecha): igual y opuesto en cadera + toe-off de tobillo ---
-        w = bell01(phi, 0.25, 0.85)         
-        stance_hip = -STANCE_HIP_COEFF * hip_target * w
+        # --- Pierna de apoyo (derecha): contrapeso de cadera + toe-off edge-trigger ---
+        w = bell01(phi, 0.25, 0.85)
+        stance_hip = +STANCE_HIP_COEFF * hip_target * w
         cmd[self.jm.hip_r] = slew(self._slew.prev[self.jm.hip_r], stance_hip, g.hip_vel_max, dt)
         self._slew.prev[self.jm.hip_r] = cmd[self.jm.hip_r]
 
-        # Toe-off suave al final del swing de la pierna opuesta
+        # Toe-off con edge-trigger + refractario + chequeos extra
         toe_w = in_window(phi, *TOEOFF_WIN_L)  # 0..1 en ventana final
-        if toe_w > 0.0:
+        edge = (toe_w > 0.0) and (self._toe_w_prev_L == 0.0) and (phi > TOEOFF_WIN_L[0])
+
+        # condiciones extra: refractario, late-swing en la rodilla de la pierna en swing (izquierda), roll moderado
+        roll_deg = abs(getattr(self, "_imu_roll", 0.0) * 180.0 / math.pi)
+        knee_swing_L = gain * g.knee_swing_max_rad * math.sin(math.pi * phi)
+        can_toe = (self._toe_timer == 0.0) and (knee_swing_L >= self._knee_late_swing_rad) and (roll_deg <= self._max_roll_deg_for_toe)
+
+        if edge and can_toe and getattr(self, "_imu_pitch", 0.0) > -0.01:
             toe = gain * TOEOFF_ANKLE_RAD * toe_w
-            # plantarflexión = signo negativo en pitch (hacia abajo)
             toe_cmd = slew(self._slew.prev[self.jm.ankle_r], -toe, g.ankle_vel_max, dt)
             cmd[self.jm.ankle_r] = toe_cmd
             self._slew.prev[self.jm.ankle_r] = toe_cmd
+            self._toe_timer = self._toe_refrac_s  # activa refractario
 
-        # Guardar previos
+        self._toe_w_prev_L = toe_w
+
+        # Clamp anti-dorsi en apoyo (derecha) en la mitad del swing opuesto
+        if 0.35 <= phi <= 0.65:
+            _cur = cmd.get(self.jm.ankle_r, self._slew.prev[self.jm.ankle_r])
+            _ank = min(_cur, 0.0)  # no dorsiflexión (>0); permitir plantar/neutral (<=0)
+            cmd[self.jm.ankle_r] = _ank
+            self._slew.prev[self.jm.ankle_r] = _ank
+
+        # Guardar previos swing L
         self._slew.prev[self.jm.hip_l]   = cmd[self.jm.hip_l]
         self._slew.prev[self.jm.knee_l]  = cmd[self.jm.knee_l]
         self._slew.prev[self.jm.ankle_l] = cmd[self.jm.ankle_l]
 
-                # Aplicar signos de hardware
+        # Aplicar signos de hardware
         cmd[self.jm.hip_l]   *= self.signs[self.jm.hip_l]
         cmd[self.jm.knee_l]  *= self.signs[self.jm.knee_l]
-        cmd[self.jm.ankle_l] *= self.signs[self.jm.ankle_l]
+        # cmd[self.jm.ankle_l] *= self.signs[self.jm.ankle_l]  # mantener si tu hardware lo requiere
         cmd[self.jm.hip_r]   *= self.signs[self.jm.hip_r]
-        if self.jm.ankle_r in cmd:
-            cmd[self.jm.ankle_r] *= self.signs[self.jm.ankle_r]
-
-
-        # Pierna contraria (stance) podría llevar un micro-contrapeso si se necesita
-        # (lo dejamos en 0 para que tu BalanceController lleve la batuta)
 
     def _apply_swing_right(self, cmd: Dict[str, float], phi: float, gain: float, dt: float):
         g = self.g
-        hip_target   = gain * g.hip_swing_boost_rad
-        knee_target  = gain * g.knee_swing_max_rad * math.sin(math.pi * phi)
-        ankle_target = gain * (g.ankle_base_rad + g.dorsi_mid_rad * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b))
+        hip_target   = gain * g.hip_swing_boost_rad * self.stride_base
+        hip_target  += gain * HIP_WALK_FWD_BIAS_RAD
+        # Escala de swing (altura de paso)
+        s = math.sin(math.pi * phi)   # 0..1..0 en la fase de swing
+        if s < 0.0:
+            s = 0.0
 
-        _z_clear = foot_height(phi, g.foot_clearance_m)
+        amp = gain * self.stride_base
+
+        knee_target  = (amp * self._knee_gain
+                        * g.knee_swing_max_rad * s)
+
+        ankle_target = amp * (
+            g.ankle_base_rad
+            + self._ankle_gain * g.dorsi_mid_rad
+              * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b)
+        )
+
 
         cmd[self.jm.hip_r]   = slew(self._slew.prev[self.jm.hip_r],   hip_target,   g.hip_vel_max,   dt)
         cmd[self.jm.knee_r]  = slew(self._slew.prev[self.jm.knee_r],  knee_target,  g.knee_vel_max,  dt)
         cmd[self.jm.ankle_r] = slew(self._slew.prev[self.jm.ankle_r], ankle_target, g.ankle_vel_max, dt)
 
-                # --- Pierna de apoyo (izquierda): igual y opuesto en cadera + toe-off ---
+        # --- Pierna de apoyo (izquierda): contrapeso de cadera + toe-off edge-trigger ---
         w = bell01(phi, 0.25, 0.85)
-        stance_hip = -STANCE_HIP_COEFF * hip_target * w
+        stance_hip = STANCE_HIP_COEFF * hip_target * w
         cmd[self.jm.hip_l] = slew(self._slew.prev[self.jm.hip_l], stance_hip, g.hip_vel_max, dt)
         self._slew.prev[self.jm.hip_l] = cmd[self.jm.hip_l]
 
         toe_w = in_window(phi, *TOEOFF_WIN_R)
-        if toe_w > 0.0:
+        edge = (toe_w > 0.0) and (self._toe_w_prev_R == 0.0) and (phi > TOEOFF_WIN_R[0])
+
+        roll_deg = abs(getattr(self, "_imu_roll", 0.0) * 180.0 / math.pi)
+        knee_swing_L = gain * g.knee_swing_max_rad * math.sin(math.pi * phi)
+        can_toe = (self._toe_timer == 0.0) and (knee_swing_L >= self._knee_late_swing_rad) and (roll_deg <= self._max_roll_deg_for_toe)
+
+        if edge and can_toe and getattr(self, "_imu_pitch", 0.0) > -0.01:
             toe = gain * TOEOFF_ANKLE_RAD * toe_w
             toe_cmd = slew(self._slew.prev[self.jm.ankle_l], -toe, g.ankle_vel_max, dt)
             cmd[self.jm.ankle_l] = toe_cmd
             self._slew.prev[self.jm.ankle_l] = toe_cmd
+            self._toe_timer = self._toe_refrac_s
 
+        self._toe_w_prev_R = toe_w
 
+        # Clamp anti-dorsi en apoyo (izquierda) en la mitad del swing opuesto
+        if 0.30 <= phi <= 0.70:
+            _cur = cmd.get(self.jm.ankle_l, self._slew.prev[self.jm.ankle_l])
+            _ank = min(_cur, 0.0)
+            cmd[self.jm.ankle_l] = _ank
+            self._slew.prev[self.jm.ankle_l] = _ank
+
+        # Guardar previos swing R
         self._slew.prev[self.jm.hip_r]   = cmd[self.jm.hip_r]
         self._slew.prev[self.jm.knee_r]  = cmd[self.jm.knee_r]
         self._slew.prev[self.jm.ankle_r] = cmd[self.jm.ankle_r]
 
-                # Aplicar signos de hardware
+        # Aplicar signos de hardware
         cmd[self.jm.hip_r]   *= self.signs[self.jm.hip_r]
         cmd[self.jm.knee_r]  *= self.signs[self.jm.knee_r]
-        cmd[self.jm.ankle_r] *= self.signs[self.jm.ankle_r]
+        # cmd[self.jm.ankle_r] *= self.signs[self.jm.ankle_r]
         cmd[self.jm.hip_l]   *= self.signs[self.jm.hip_l]
-        if self.jm.ankle_l in cmd:
-            cmd[self.jm.ankle_l] *= self.signs[self.jm.ankle_l]

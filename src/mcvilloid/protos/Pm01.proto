@@ -214,7 +214,7 @@ PROTO Pm01 [
                                       ]
                                       endPoint Solid {
                                         translation 0.000000 0.000000 -0.015000
-                                        contactMaterial "foot"
+                                        contactMaterial "rubber"
                                         children [
                                           Shape {
                                             appearance DEF link_ankle_roll_l_material PBRAppearance {
@@ -487,7 +487,7 @@ PROTO Pm01 [
                                       ]
                                       endPoint Solid {
                                         translation 0.000000 0.000000 -0.015000
-                                        contactMaterial "foot"
+                                        contactMaterial "rubber"
                                         children [
                                           Shape {
                                             appearance DEF link_ankle_roll_r_material PBRAppearance {
