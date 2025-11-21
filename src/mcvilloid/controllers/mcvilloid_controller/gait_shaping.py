@@ -414,39 +414,6 @@ def update_walk_outputs(
         if hip_roll_sup in target:
             target[hip_roll_sup] += 0.010
 
-    # --- Detector de caída hacia atrás: mandar a RECOVER si se pasa ---
-    if state == "WALK":
-        BACK_TRIG_PITCH_SOFT = -0.15       # empieza a preocuparse
-        BACK_TRIG_PITCH_HARD = -0.28       # ya es claramente caída
-        BACK_TRIG_GY         = -0.55       # giro muy brusco hacia atrás
-
-        cond_soft = (pitch_f < BACK_TRIG_PITCH_SOFT and (not gyro or gy < -0.20))
-        cond_hard = (pitch_f < BACK_TRIG_PITCH_HARD)
-        cond_gyro = (gyro and gy < BACK_TRIG_GY and pitch_f < -0.05)
-
-        if cond_soft or cond_hard or cond_gyro:
-            LOG.info(
-                "recover",
-                f"[TRIG_BACK] pitch_f={pitch_f:+.3f} gy={gy:+.3f}"
-            )
-            state = "RECOVER"
-            recover_timer = 0.0
-            walker.set_global_gain(0.0)
-
-            return (
-                walk_timer,
-                gait_soft_t,
-                STRIDE_BASE,
-                steps_taken,
-                gait_gain,
-                stride_gain,
-                step_ctx,
-                _tele_t,
-                state,
-                recover_timer,
-                left_is_swing,
-            )
-
     # Return normal si no hubo trigger de RECOVER
     return (
         walk_timer,

@@ -100,15 +100,29 @@ def run():
     # Límites de velocidad por tipo (valores razonables)
     ank_vel = float(limits.get("ankle_vel", 1.0))
     hip_vel = float(limits.get("hip_vel",   1.8))
+
     for name, m in motors.items():
+        # Rodillas
         if "knee_" in name:
-            m.setVelocity(3.5)
+            if name == "j09_knee_pitch_r":
+                # Rodilla derecha: déjala un poco más rápida
+                m.setVelocity(4.5)
+            else:
+                # Rodilla izquierda u otras
+                m.setVelocity(3.5)
+
+        # Tobillos
         elif "ankle_" in name:
             m.setVelocity(ank_vel)
+
+        # Caderas / yaw
         elif any(s in name for s in ["hip_", "yaw_"]):
             m.setVelocity(hip_vel)
+
+        # Otros (por si acaso)
         else:
             m.setVelocity(2.0)
+
 
     # Postura neutra
     neutral_cfg = (params.get("neutral_pose") or {})
@@ -148,10 +162,10 @@ def run():
     gait_soft_t = 0.0
     GAIT_SOFT_S = float(params.get("gait", {}).get("soft_start_s", 2.0))
     # --- Escalado de zancada (ajustada) ---
-    STRIDE_BASE   = float(params.get("gait", {}).get("stride_base", 1.0))
-    STRIDE_MAX    = float(params.get("gait", {}).get("stride_max",  1.55))  # ↑ techo
-    STRIDE_MIN    = 0.90
-    STRIDE_WARM_S = 1.40  # s para “soltar” la zancada al arrancar WALK
+    STRIDE_BASE   = float(params.get("gait", {}).get("stride_base", 1.1))
+    STRIDE_MAX    = float(params.get("gait", {}).get("stride_max",  1.80))  # ↑ techo
+    STRIDE_MIN    = 0.95
+    STRIDE_WARM_S = 0.90  # s para “soltar” la zancada al arrancar WALK
     # Umbrales IMU (para guards/decisiones)
     T_ENTER = 0.10
     T_EXIT  = 0.08
@@ -177,7 +191,7 @@ def run():
     # --- Cronómetro y warm-up de pasos ---
     walk_timer = 0.0
     steps_taken = 0
-    WARM_STEPS = 3  # limitar zancada y ganancia en los 3 primeros pasos
+    WARM_STEPS = 2  # limitar zancada y ganancia en los 3 primeros pasos
 
     # === FSM simple por paso (bueno/malo) ===
     step_ctx = step_fsm_init()
@@ -274,31 +288,38 @@ def run():
         p_abs = abs(pitch_f)
         r_abs = abs(roll_f)
 
-        P_SOFT = 0.04
-        P_HARD = 0.09
-        GAIN_FLOOR = 0.05
+        P_SOFT = 0.06
+        P_HARD = 0.14
+        GAIN_FLOOR = 0.20   # antes era 0.05 o 0.15
 
+        # --- pitch ---
         if p_abs <= P_SOFT:
             g_pitch = 1.0
         elif p_abs >= P_HARD:
             g_pitch = GAIN_FLOOR
         else:
             t_norm = (p_abs - P_SOFT) / (P_HARD - P_SOFT)
-            g_pitch = max(GAIN_FLOOR, (1.0 - t_norm) ** 2)
+            g_pitch = max(GAIN_FLOOR, 1.0 - 0.7 * t_norm)  # curva suave
 
-        if pitch_f < 0.0:
-            g_pitch = max(GAIN_FLOOR, g_pitch * (1.0 - 5.0 * max(0.0, -pitch_f)))
+        # Penalización extra sólo si realmente va muy hacia atrás
+        if pitch_f < -0.08:
+            back = min(0.16, -pitch_f - 0.08)  # 0..0.08
+            g_pitch *= (1.0 - 1.2 * back)      # quita hasta ~10% extra
+            g_pitch = max(GAIN_FLOOR, g_pitch)
 
+        # --- roll (más o menos igual que tenías, pero con piso más alto) ---
         if r_abs <= 0.06:
             g_roll = 1.0
-        elif r_abs >= 0.18:
+        elif r_abs >= 0.20:
             g_roll = GAIN_FLOOR
         else:
-            t_norm = (r_abs - 0.06) / (0.18 - 0.06)
-            g_roll = max(GAIN_FLOOR, (1.0 - t_norm) ** 2)
-        g_roll *= max(GAIN_FLOOR, 1.0 - 2.0 * max(0.0, r_abs - 0.06))
+            t_norm = (r_abs - 0.06) / (0.20 - 0.06)
+            g_roll = max(GAIN_FLOOR, 1.0 - 0.8 * t_norm)
+
+        g_roll *= max(GAIN_FLOOR, 1.0 - 1.0 * max(0.0, r_abs - 0.08))
 
         gait_gain = min(g_pitch, g_roll)
+
 
         # 4) FSM Gait principal
         can_walk     = abs(pitch_f) < T_ENTER
@@ -323,26 +344,48 @@ def run():
         elif state == "WALK":
             SAFE_GRACE_S = 0.35
 
-            # --- NUEVO: detección explícita de caída hacia atrás ---
             gy_val = gy if gyro else 0.0
-            BACK_TRIG = -0.11   # ~ -6°
-            GY_TRIG   = 0.40    # rad/s aprox
+            back   = max(0.0, -pitch_f)   # inclinación hacia atrás en positivo
 
-            back_fall_now = (pitch_f < BACK_TRIG and gy_val < -GY_TRIG)
+            # ----------------- ANTI-TRASERA SUAVE -----------------
+            if back > 0.07:
+                gait_gain *= 0.5
+                if 'STRIDE_BASE' in globals():
+                    STRIDE_BASE = max(STRIDE_MIN, STRIDE_BASE * 0.93)
+
+            if 0.10 < back < 0.22:
+                gait_gain *= 0.6
+                if 'STRIDE_BASE' in globals():
+                    STRIDE_BASE = max(STRIDE_MIN, STRIDE_BASE * 0.96)
+
+            # ----------------- TRIGGER DE CAÍDA DURA -----------------
+            BACK_TRIG = 0.22   # ~15° hacia atrás
+            GY_TRIG   = 1.05   # rotación fuerte atrás
+
+            back_fall_now = (
+                (back > BACK_TRIG) and        # mucho hacia atrás
+                (gy_val < -GY_TRIG) and       # girando rápido hacia atrás
+                (walk_timer > 1.0 + SAFE_GRACE_S)
+            )
 
             if back_fall_now:
-                LOG.info("recover", f"[TRIG_BACK_WALK] pitch_f={pitch_f:+.3f} gy={gy_val:+.3f}")
+                LOG.info(
+                    "recover",
+                    f"[TRIG_BACK_WALK] pitch_f={pitch_f:+.3f} back={back:+.3f} "
+                    f"gy={gy_val:+.3f} BACK_TRIG={BACK_TRIG:.2f} GY_TRIG={GY_TRIG:.2f}"
+                )
                 state = "RECOVER"
                 recover_timer = 0.0
                 bal_prev.clear()
-                for j in ("j04_ankle_pitch_l", "j10_ankle_pitch_r",
+                for j in ("j04_ankle_pitch_l", "j10_ankle_roll_r",
                           "j05_ankle_roll_l", "j11_ankle_roll_r"):
                     bal_prev[j] = 0.0
 
+
             else:
                 # Sólo detectamos near_fall cuando se va de cara o por roll
-                T_FALL_EFF = max(T_FALL, 0.40)
-                T_WARN_EFF = max(T_WARN, 0.24)
+                T_FALL_EFF = max(T_FALL, 0.45)
+                T_WARN_EFF = max(T_WARN, 0.28)
 
                 near_fall_now = (
                     (pitch_f > T_FALL_EFF) or           # irse hacia adelante
@@ -352,19 +395,19 @@ def run():
                      (gait_gain < 0.15))
                 )
 
-                # Sólo usamos gait_gain bajo como motivo de RECOVER
-                # cuando el torso se va hacia ADELANTE (pitch_f > 0.0).
-                if near_fall_now or (gait_gain <= 0.10 and pitch_f > 0.0) or pose["on"]:
+                if near_fall_now or pose["on"]:
                     state = "RECOVER"
                     recover_timer = 0.0
                     bal_prev.clear()
-                    LOG.info("gait", "[RECOVER] near_fall/grace/gain<=0/pose_on")
+                    LOG.info("gait", "[RECOVER] near_fall/pose_on")
                     for j in ("j04_ankle_pitch_l", "j10_ankle_pitch_r",
                               "j05_ankle_roll_l", "j11_ankle_roll_r"):
                         bal_prev[j] = 0.0
 
                 elif not gait_enable:
                     state = "STAND"
+
+
 
 
 
@@ -491,28 +534,72 @@ def run():
         elif state == "WALK":
             desired_on = True
 
-            # Sesgo base: torso un poco hacia ADELANTE
-            HIP_BASE = 0.0  # un pelín, menos agresivo que antes
+            # En este robot: hip_pitch NEGATIVO = torso hacia ADELANTE.
+            HIP_BASE = -0.030  # base probada
 
-            # Corrección extra si el torso se nos va hacia "atrás" según la IMU
-            back = max(0.0, -pitch_f)  # sólo cuenta cuando pitch_f < 0
-            extra_hip = 0.0
+            # pitch_f > 0  → inclinado hacia adelante
+            # pitch_f < 0  → inclinado hacia atrás
+            back = max(0.0, -pitch_f)   # sólo cuando pitch_f < 0
+            fwd  = max(0.0,  pitch_f)   # sólo cuando pitch_f > 0
+
+            extra_hip  = 0.0
+            extra_ank  = 0.0
+            extra_knee = 0.0
+
+            # --- 1) CORRECCIÓN HACIA ATRÁS (de nalgas) ---
             if back > 0.02:
-                # Normaliza cuánto se está yendo (satura alrededor de ~0.20 rad)
+                # 0.02 rad ≈ umbral donde empezamos a actuar,
+                # 0.20 rad ≈ "muy atrás" pero sin saturar demasiado
                 back_norm = min(1.0, (back - 0.02) / (0.20 - 0.02))
-                # NEGATIVO = torso hacia ADELANTE en este robot
-                extra_hip = -(0.015 + 0.045 * back_norm)   # ~[-0.015 .. -0.060]
 
+                # Hips: hasta ~ -0.12 rad (≈ -7°) ADEMÁS de HIP_BASE
+                extra_hip = -(0.040 + 0.080 * back_norm)
+                HIP_MAX_BACK = 0.12
+                extra_hip = max(-HIP_MAX_BACK, min(HIP_MAX_BACK, extra_hip))
+
+                # Tobillos: dorsiflexión moderada, hasta ~ +0.035 rad
+                extra_ank = +0.015 + 0.020 * back_norm
+                ANK_MAX_BACK = 0.035
+                extra_ank = max(-ANK_MAX_BACK, min(ANK_MAX_BACK, extra_ank))
+
+                # Rodillas: muy poquito, para no romper el patrón del Walker
+                extra_knee = 0.08 * back_norm
+
+            # --- 2) CORRECCIÓN SUAVE HACIA ADELANTE ---
+            elif fwd > 0.04:
+                # Sólo corregimos si se pasa de ~0.04 rad (~2.3°)
+                fwd_eff = fwd - 0.04
+
+                K_HIP_FWD = +0.30   # rad_extra_hip / rad_pitch
+                K_ANK_FWD = -0.10   # rad_extra_ank / rad_pitch (toes down)
+
+                extra_hip = K_HIP_FWD * fwd_eff
+                extra_ank = K_ANK_FWD * fwd_eff
+
+                # Saturaciones por seguridad (adelante queremos ser suaves)
+                extra_hip = max(-0.02, min(+0.04, extra_hip))
+                extra_ank = max(-0.02, min(+0.00, extra_ank))
+
+            # --- Aplicar a caderas (pitch) ---
             for hip in ("j00_hip_pitch_l", "j06_hip_pitch_r"):
                 if hip in target:
                     target[hip] += HIP_BASE + extra_hip
 
-            extra_ank = 0.0
+            # --- Aplicar a tobillos pitch (simétrico) ---
+            for ank in ("j04_ankle_pitch_l", "j10_ankle_pitch_r"):
+                if ank in target:
+                    target[ank] += extra_ank
+
+            # --- Rodillas: sólo un extra pequeño cuando back>0 ---
+            if extra_knee > 0.0:
+                for knee in ("j03_knee_pitch_l", "j09_knee_pitch_r"):
+                    if knee in target:
+                        target[knee] += extra_knee
 
             LOG.info(
                 "gait",
                 f"[PITCH_CORR] pitch_f={pitch_f:+.3f} HIP_BASE={HIP_BASE:+.3f} "
-                f"extra_hip={extra_hip:+.3f} extra_ank={extra_ank:+.3f}"
+                f"extra_hip={extra_hip:+.3f} extra_ank={extra_ank:+.3f} extra_knee={extra_knee:+.3f}"
             )
 
             state_before = state
@@ -642,7 +729,26 @@ def run():
 
         # 8) Aplicar
         for n, m in motors.items():
-            m.setPosition(target[n])
+            cmd = target[n]
+
+            # --- Parche: amplificar un poco la zancada de la pierna derecha ---
+            # Usamos la desviación respecto a la pose base, para no mover la neutra.
+            if state == "WALK":
+                base = base_pose.get(n, 0.0)
+                delta = cmd - base
+
+                # Rodilla derecha: j09_knee_pitch_r
+                if n == "j09_knee_pitch_r":
+                    delta *= 1.4  # prueba 1.6, luego ajustas a 1.4 / 1.8 si se ve loco
+
+                # (opcional) Cadera derecha un pelín más activa
+                if n == "j06_hip_pitch_r":
+                    delta *= 1.2  # poquito, para no romper el equilibrio
+
+                cmd = base + delta
+
+            m.setPosition(cmd)
+
 
         # === GPS / dirección ===
         if not hasattr(walker, "dir"):

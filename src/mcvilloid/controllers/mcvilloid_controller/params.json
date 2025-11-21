@@ -2,7 +2,7 @@
   "enable_I": true,
 
   "gains": {
-    "pitch": { "kp": 0.75, "kd": 0.25 },
+    "pitch": { "kp": 0.68, "kd": 0.24 },
     "roll":  { "kp": 0.70, "kd": 0.20 }
   },
   "ki": { "pitch": 0.004, "roll": 0.002 },
@@ -15,8 +15,8 @@
     "roll_to_hip":    0.35
   },
 
-  "deadband_deg": 0.7,
-  "soft_start_s": 3.0,
+  "deadband_deg": 1.8,
+  "soft_start_s": 2.5,
 
   "limits": {
     "ankle_pos": 0.18,
@@ -87,32 +87,34 @@
   "gait": {
     "enabled_on_start": false,
     "auto_on": false,
-    "freq_hz": 0.82,
+    "freq_hz": 1.1,
     "soft_start_s": 0.9,
     "phase_offset": { "L": 0.0, "R": 3.1415926 },
     "direction": "forward",
 
     "step_amp": {
-      "hip_pitch":   0.40,
+      "hip_pitch":   0.38,
       "knee_pitch":  0.42,
       "ankle_pitch": 0.0
     },
     "lateral_amp": {
-      "hip_roll":   0.006,
-      "ankle_roll": 0.003
+      "hip_roll":   0.012,
+      "ankle_roll": 0.006
     },
     "bias": {
       "torso_pitch": 0.14,
       "ankle_pitch": 0.00,
-      "torso_hip_pitch": -0.035,
+      "torso_hip_pitch": -0.03,
       "ankle_dorsi": 0.0
     },
-    "clearance_m": 0.050,
-    "dorsi_mid_rad": 0.030,
-    "dorsi_window": [0.38, 0.58],
-    "lateral_shift_rad": 0.030,
-    "stride_base": 1.05,
-    "stride_max":  1.15,
+    "knee_swing_gain": 2.3,
+    "ankle_swing_gain": 1.8,
+    "clearance_m": 0.035,
+    "dorsi_mid_rad": 0.050,
+    "dorsi_window": [0.25, 0.75],
+    "lateral_shift_rad": 0.050,
+    "stride_base": 1.25,
+    "stride_max":  1.35,
     "slew_rad_s": {
       "knee":  4.8,
       "ankle": 2.6,
@@ -134,8 +136,8 @@
     },
 
     "guards": {
-      "pitch_ok_rad": 0.04,
-      "pitch_stop_rad": 0.06,
+      "pitch_ok_rad": 0.05,
+      "pitch_stop_rad": 0.09,
       "roll_stop_rad": 0.30
     },
 
@@ -147,7 +149,7 @@
 
     "ramp": {
       "first_cycles_limit_amp": true,
-      "cycles": 3,
+      "cycles": 2,
       "scale": 0.65
     },
     "prelean": {
@@ -175,16 +177,16 @@
   "debug": { "log_every": 7, "print_imu": true, "print_cmd": true },
 
   "scheduling": {
-    "abs_pitch_rad_thresh": 0.06,
+    "abs_pitch_rad_thresh": 0.16,
     "pitch_to_hip_hi": 0.90,
     "kd_pitch_hi": 1.8,
-    "amp_scale_on_tilt": 0.2
+    "amp_scale_on_tilt": 0.7
   },
 
   "fall_arrest": {
-    "pitch_neg_trig": -0.05,
-    "boost_duration_s": 0.45,
-    "hip_boost_add": 0.12
+    "pitch_neg_trig": -0.035,
+    "boost_duration_s": 0.5,
+    "hip_boost_add": 0.14
   },
   "cmd_lpf_tau_s": 0.05,
   "quiet_zone_deg": 0.6

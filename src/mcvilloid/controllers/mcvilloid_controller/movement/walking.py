@@ -63,7 +63,7 @@ TOEOFF_WIN_L = (0.85, 0.98)  # ventana de toe-off cuando la otra pierna está en
 TOEOFF_WIN_R = (0.85, 0.98)  # ventana de toe-off cuando la otra pierna está en SWING_R (ajustada)
 
 # Bias de cadera hacia adelante (suaviza inicio de paso)
-HIP_WALK_FWD_BIAS_RAD = 0.03
+HIP_WALK_FWD_BIAS_RAD = 0.05
 
 # Gate de IMU con histéresis
 IMU_GATE_ON_DEG  = 8.0    # entra a modo recortado si |pitch| > 8°
@@ -150,8 +150,8 @@ class Walker:
 
 
         # --- Ganancia extra de rodilla y tobillo en swing (altura de paso) ---
-        self._knee_gain  = float(G.get("knee_swing_gain", 1.5))   # 1.5x por defecto
-        self._ankle_gain = float(G.get("ankle_swing_gain", 1.2))  # un pelín más de dorsi
+        self._knee_gain  = float(G.get("knee_swing_gain", 2.0))   # 1.5x por defecto
+        self._ankle_gain = float(G.get("ankle_swing_gain", 1.5))  # un pelín más de dorsi
 
 
         # Tiempos
@@ -175,11 +175,11 @@ class Walker:
             swing_time_s=swing_time_s,
             stance_time_s=stance_time_s,
             hip_swing_boost_rad=hip_boost,
-            knee_swing_max_rad=float(G.get("step_amp", {}).get("knee_pitch", knee_max)),
+            knee_swing_max_rad=float(G.get("step_amp", {}).get("knee_pitch", 0.35)),
             knee_vel_max=float(G.get("slew_rad_s", {}).get("knee", 1.8)),  # antes 2.3
             ankle_base_rad=ankle_base,
             foot_clearance_m=float(G.get("clearance_m", 0.03)),
-            dorsi_mid_rad=float(G.get("dorsi_mid_rad", 0.04)),
+            dorsi_mid_rad=float(G.get("dorsi_mid_rad", 0.06)),
             dorsi_window_a=float(G.get("dorsi_window", [0.30, 0.70])[0]),
             dorsi_window_b=float(G.get("dorsi_window", [0.30, 0.70])[1]),
             ankle_vel_max=float(G.get("slew_rad_s", {}).get("ankle", 2.3)),
@@ -365,6 +365,21 @@ class Walker:
 
 
     # ---------- Internos ----------
+    def _extra_swing_lift(self, phi: float, amp: float):
+        """
+        Extra flexión de rodilla y dorsiflexión de tobillo en la fase de swing
+        para aumentar la altura de paso.
+        phi: fase local 0..1 de la pierna en swing
+        amp: amplitud (ya incluye gain * stride)
+        """
+        # pico en la mitad del swing, suave
+        lift = math.sin(math.pi * phi) ** 2  # 0..1..0
+        # Escala relativa: 0.0 - 0.4 veces la rodilla máxima
+        extra_knee = amp * 0.60 * self.g.knee_swing_max_rad * lift
+        # Un poco extra de dorsiflexión (puntas arriba)
+        extra_ank = amp * 0.80 * self.g.dorsi_mid_rad * lift
+        return extra_knee, extra_ank
+    
 
     def _next_phase(self):
         # Ciclo: STANCE_L → SWING_R → STANCE_R → SWING_L → ...
@@ -405,6 +420,10 @@ class Walker:
             + self._ankle_gain * g.dorsi_mid_rad
               * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b)
         )
+
+        extra_knee, extra_ank = self._extra_swing_lift(phi, amp)
+        knee_target  += extra_knee
+        ankle_target += extra_ank
 
 
         # Slew (pierna en swing)
@@ -473,6 +492,10 @@ class Walker:
             + self._ankle_gain * g.dorsi_mid_rad
               * bell_window(phi, g.dorsi_window_a, g.dorsi_window_b)
         )
+
+        extra_knee, extra_ank = self._extra_swing_lift(phi, amp)
+        knee_target  += extra_knee
+        ankle_target += extra_ank
 
 
         cmd[self.jm.hip_r]   = slew(self._slew.prev[self.jm.hip_r],   hip_target,   g.hip_vel_max,   dt)
