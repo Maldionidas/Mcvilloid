@@ -4,6 +4,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
 IMPORTABLE EXTERNPROTO "../protos/Pm01.proto"
+IMPORTABLE EXTERNPROTO "../protos/HU_D04_01.proto"
+IMPORTABLE EXTERNPROTO "../protos/x1.proto"
 
 WorldInfo {
   basicTimeStep 16
@@ -11,8 +13,9 @@ WorldInfo {
     ContactProperties {
       material1 "rubber"
       material2 "concrete"
-      coulombFriction [1.20 1.00]
-      slip[0.01 0.02]
+      coulombFriction [
+        1.2, 1
+      ]
       bounce 0
       forceDependentSlip [
         0.02
@@ -28,8 +31,8 @@ WorldInfo {
   ]
 }
 Viewpoint {
-  orientation 0.07279042436994135 -0.03472593542968584 -0.9967425261964982 4.02928796549544
-  position 4.178482602480801 -4.136572969261586 1.5893253824691016
+  orientation -0.12111360467907988 0.06226140270855223 0.9906841133754003 2.1995194941706573
+  position 5.300584640467789 -7.143745470526489 2.7166818478760355
 }
 TexturedBackground {
 }
@@ -40,4 +43,11 @@ RectangleArena {
 }
 Pm01 {
   translation 0 0 0.83
+}
+HU_D04_01 {
+  translation 0 -0.77 0.91
+}
+x1 {
+  hidden rotation_39 1 -2.7165174724678256e-10 2.7165165847238274e-10 1.5707959999999994
+  translation 0 0.81 0.68
 }

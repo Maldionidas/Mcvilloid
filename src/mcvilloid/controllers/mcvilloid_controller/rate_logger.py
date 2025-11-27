@@ -5,16 +5,7 @@ import time
 class RateLogger:
     LVL = {"debug": 10, "info": 20, "warn": 30}
 
-    def __init__(self, cfg, now_fn=None):
-        """
-        cfg:
-          - enabled: bool
-          - level: "debug" | "info" | "warn"
-          - rate_hz: frecuencia máxima de logs por canal
-          - channels: dict opcional {nombre_canal: bool}
-        now_fn:
-          - función que devuelve tiempo en segundos (por defecto time.monotonic)
-        """
+    def __init__(self, cfg, now_fn=None, robot_name="???"):
         self.enabled  = bool(cfg.get("enabled", True))
         self.level    = self.LVL.get(str(cfg.get("level", "info")).lower(), 20)
         self.rate_hz  = float(cfg.get("rate_hz", 10.0))
@@ -22,6 +13,7 @@ class RateLogger:
         self.channels = {k: bool(v) for k, v in cfg.get("channels", {}).items()}
         self._last    = {}
         self._now     = now_fn or time.monotonic
+        self.tag      = f"[{robot_name}]"
 
     def _ok(self, ch, lvl):
         if not self.enabled:
@@ -38,12 +30,12 @@ class RateLogger:
 
     def debug(self, ch, msg):
         if self._ok(ch, self.LVL["debug"]):
-            print(f"[{ch}] {msg}", flush=True)
+            print(f"{self.tag}[{ch}] {msg}", flush=True)
 
     def info(self, ch, msg):
         if self._ok(ch, self.LVL["info"]):
-            print(f"[{ch}] {msg}", flush=True)
+            print(f"{self.tag}[{ch}] {msg}", flush=True)
 
     def warn(self, ch, msg):
         if self._ok(ch, self.LVL["warn"]):
-            print(f"[{ch}] {msg}", flush=True)
+            print(f"{self.tag}[{ch}] {msg}", flush=True)

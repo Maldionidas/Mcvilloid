@@ -7,18 +7,32 @@ Manejo de teclado para McVilloid:
 - P/M: ajustar zancada base
 """
 
-def handle_keyboard(kb, walker, pose,
-                    STRIDE_BASE, STRIDE_MIN, STRIDE_MAX,
-                    gait_enable, LOG):
+def handle_keyboard(
+    kb,
+    walker,
+    pose,
+    STRIDE_BASE,
+    STRIDE_MIN,
+    STRIDE_MAX,
+    gait_enable,
+    LOG,
+    enabled: bool = True,
+):
     """
-    Lee todas las teclas pendientes y actualiza:
+    Lee las teclas y actualiza:
       - gait_enable
       - walker.dir
       - pose
       - STRIDE_BASE (y se lo setea al walker)
     """
+
+    # Si el teclado está deshabilitado por config, no hacemos nada
+    if not enabled:
+        return gait_enable, STRIDE_BASE
+
     key = kb.getKey()
     while key != -1:
+        # --- Marcha ON/OFF ---
         if key in (ord('W'), ord('w')):
             gait_enable = True
             LOG.info("gait", "gait_enable = True")
@@ -27,6 +41,7 @@ def handle_keyboard(kb, walker, pose,
             gait_enable = False
             LOG.info("gait", "gait_enable = False")
 
+        # --- Dirección ---
         elif key in (ord('A'), ord('a')):  # backward
             walker.dir = -1.0
             LOG.info("gait", "Direction: BACKWARD")

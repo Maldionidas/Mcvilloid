@@ -17,7 +17,7 @@ def generate_launch_description():
     webots_bin = next((p for p in candidates if os.path.exists(p)), None)
     assert webots_bin, f"No encontré Webots en: {candidates}"
 
-    world_unix = '/home/maldonado/ros2_ws/src/mcvilloid/worlds/Pm01.wbt'
+    world_unix = '/home/maldonado/ros2_ws/src/mcvilloid/worlds/sample2.wbt'
     world_arg = world_unix
 
     # Si es el .exe de Windows, convertir ruta del mundo a formato Windows

@@ -1,0 +1,44 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+IMPORTABLE EXTERNPROTO "../protos/Pm01.proto"
+
+WorldInfo {
+  basicTimeStep 16
+  contactProperties [
+    ContactProperties {
+      material1 "rubber"
+      material2 "concrete"
+      coulombFriction [
+        1.2, 1
+      ]
+      bounce 0
+      forceDependentSlip [
+        0.02
+      ]
+      softCFM 0.0001
+    }
+    ContactProperties {
+      coulombFriction [
+        2
+      ]
+      bounce 0
+    }
+  ]
+}
+Viewpoint {
+  orientation 0.07279042436994135 -0.03472593542968584 -0.9967425261964982 4.02928796549544
+  position 4.178482602480801 -4.136572969261586 1.5893253824691016
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  floorSize 10 10
+}
+Pm01 {
+  translation 0 0 0.83
+}

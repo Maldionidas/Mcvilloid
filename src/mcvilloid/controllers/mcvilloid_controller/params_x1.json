@@ -1,0 +1,214 @@
+{
+  "enable_I": true,
+  "controls": {
+    "enable_keyboard": false
+  },
+
+  "gains": {
+    "pitch": { "kp": 0.40, "kd": 0.18 },
+    "roll":  { "kp": 0.55, "kd": 0.18 }
+  },
+  "ki": { "pitch": 0.0, "roll": 0.0 },
+
+  "i_limit_deg": 5.0,
+
+  "mix": {
+    "pitch_to_ankle": 0.35,
+    "roll_to_ankle":  0.45,
+    "roll_to_hip":    0.35
+  },
+
+  "deadband_deg": 1.8,
+  "soft_start_s": 2.5,
+
+  "limits": {
+    "ankle_pos": 0.18,
+    "ankle_vel": 0.9,
+    "hip_pos":   2.30,
+    "hip_vel":   2.4,
+    "hip_roll_pos": 0.40,
+    "knee_pos": 0.95,
+    "ankle_cmd": 0.03
+  },
+
+  "signs": { "invert_pitch": true, "invert_roll": true },
+
+  "fc_d_pitch_hz": 12.0,
+  "fc_d_roll_hz": 10.0,
+
+  "rate_ff": { "pitch": 0.00, "roll": 0.02 },
+
+  "joint_signs": {
+    "ankle_pitch_l": -1.0,
+    "hip_pitch_l":   -1.0,
+    "ankle_roll_l":  1.0,
+    "hip_roll_l":    1.0,
+    "ankle_pitch_r": -1.0,
+    "hip_pitch_r":   -1.0,
+    "ankle_roll_r":  1.0,
+    "hip_roll_r":    1.0,
+
+    "ankle_pitch": -1.0,
+    "hip_pitch":   -1.0,
+    "ankle_roll":  -1.0,
+    "hip_roll":    -1.0
+  },
+
+  "imu_name": "imu_sensor",
+  "gyro_name": "gyro",
+
+  "motors": [
+    "j00_hip_pitch_l",
+    "j01_hip_roll_l",
+    "j02_hip_yaw_l",
+    "j03_knee_pitch_l",
+    "j04_ankle_pitch_l",
+    "j05_ankle_roll_l",
+    "j06_hip_pitch_r",
+    "j07_hip_roll_r",
+    "j08_hip_yaw_r",
+    "j09_knee_pitch_r",
+    "j10_ankle_pitch_r",
+    "j11_ankle_roll_r"
+  ],
+
+  "motor_map": {
+    "j00_hip_pitch_l": "left_hip_pitch_joint",
+    "j01_hip_roll_l":  "left_hip_roll_joint",
+    "j02_hip_yaw_l":   "left_hip_yaw_joint",
+    "j03_knee_pitch_l": "left_knee_joint",
+    "j04_ankle_pitch_l": "left_ankle_pitch_joint",
+    "j05_ankle_roll_l":  "left_ankle_roll_joint",
+
+    "j06_hip_pitch_r":  "right_hip_pitch_joint",
+    "j07_hip_roll_r":   "right_hip_roll_joint",
+    "j08_hip_yaw_r":    "right_hip_yaw_joint",
+    "j09_knee_pitch_r": "right_knee_joint",
+    "j10_ankle_pitch_r": "right_ankle_pitch_joint",
+    "j11_ankle_roll_r":  "right_ankle_roll_joint"
+  },
+
+  "neutral_pose": {
+    "j00_hip_pitch_l": -0.20,
+    "j01_hip_roll_l":  0.0,
+    "j02_hip_yaw_l":   0.0,
+    "j03_knee_pitch_l": 0.35,
+    "j04_ankle_pitch_l": -0.10,
+    "j05_ankle_roll_l":  0.0,
+
+    "j06_hip_pitch_r":  -0.20,
+    "j07_hip_roll_r":   0.0,
+    "j08_hip_yaw_r":    0.0,
+    "j09_knee_pitch_r": 0.35,
+    "j10_ankle_pitch_r": -0.10,
+    "j11_ankle_roll_r":  0.0
+  },
+
+  "gait": {
+    "enabled_on_start": false,
+    "auto_on": false,
+    "freq_hz": 1.1,
+    "soft_start_s": 0.9,
+    "phase_offset": { "L": 0.0, "R": 3.1415926 },
+    "direction": "forward",
+
+    "step_amp": {
+      "hip_pitch":   0.38,
+      "knee_pitch":  0.42,
+      "ankle_pitch": 0.0
+    },
+    "lateral_amp": {
+      "hip_roll":   0.012,
+      "ankle_roll": 0.006
+    },
+    "bias": {
+      "torso_pitch": 0.14,
+      "ankle_pitch": 0.00,
+      "torso_hip_pitch": -0.03,
+      "ankle_dorsi": 0.0
+    },
+    "knee_swing_gain": 2.3,
+    "ankle_swing_gain": 1.8,
+    "clearance_m": 0.035,
+    "dorsi_mid_rad": 0.050,
+    "dorsi_window": [0.25, 0.75],
+    "lateral_shift_rad": 0.050,
+    "stride_base": 1.25,
+    "stride_max":  1.35,
+    "slew_rad_s": {
+      "knee":  4.8,
+      "ankle": 2.6,
+      "hip":   3.4
+    },
+    "imu_pitch_deg_gate": 10,
+    "imu_gate_scale": 1.0,
+    "limits": {
+      "hip_pitch_cmd":   { "min": -0.60, "max": 0.60 },
+      "knee_pitch_cmd":  { "min": -0.55, "max": 0.55 },
+      "ankle_pitch_cmd": { "min": -0.03, "max": 0.03 },
+      "ankle_roll_cmd":  { "min": -0.10, "max": 0.10 }
+    },
+    "phase": {
+      "duty_factor": 0.58,
+      "swing_up_ratio": 0.42,
+      "toe_off_ratio": 0.22,
+      "heel_strike_hold": 0.12
+    },
+
+    "guards": {
+      "pitch_ok_rad": 0.05,
+      "pitch_stop_rad": 0.09,
+      "roll_stop_rad": 0.30
+    },
+
+    "scheduling": {
+      "ankle_k_scale_early": 0.7,
+      "hip_k_scale_swing": 1.10,
+      "knee_k_scale_swing": 1.0
+    },
+
+    "ramp": {
+      "first_cycles_limit_amp": true,
+      "cycles": 2,
+      "scale": 0.65
+    },
+    "prelean": {
+      "target_pitch_rad": 0.04,
+      "exit_on_pitch_rad": 0.03,
+      "timeout_s": 1.3,
+      "use_ankle_ratio": 0.10,
+      "use_hip_ratio": 0.90
+    }
+  },
+
+  "logging": {
+    "enabled": true,
+    "level": "info",
+    "rate_hz": 8,
+    "channels": {
+      "boot": true,
+      "imu": true,
+      "balance": true,
+      "gait": true,
+      "motors": false
+    }
+  },
+
+  "debug": { "log_every": 7, "print_imu": true, "print_cmd": true },
+
+  "scheduling": {
+    "abs_pitch_rad_thresh": 0.16,
+    "pitch_to_hip_hi": 0.90,
+    "kd_pitch_hi": 1.8,
+    "amp_scale_on_tilt": 0.7
+  },
+
+  "fall_arrest": {
+    "pitch_neg_trig": -0.035,
+    "boost_duration_s": 0.5,
+    "hip_boost_add": 0.14
+  },
+
+  "cmd_lpf_tau_s": 0.05,
+  "quiet_zone_deg": 0.6
+}

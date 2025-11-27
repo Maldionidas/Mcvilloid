@@ -43,26 +43,63 @@ else:
 
 TIME_STEP = 16  # ms
 
-def load_params():
-    with open(os.path.join(HERE, "params.json"), "r") as f:
+def load_params(robot_name: str):
+    # Mapa de nombres de robot -> archivo de params
+    FILE_MAP = {
+        "pm01":      "params_pm01.json",
+        "hu_d04_01": "params_HU.json",
+        #"x1":        "params_x1.json",
+    }
+
+    name_l = robot_name.lower()
+    cfg_name = None
+
+    # Buscar por substring (por si el robot se llama "Pm01_v2" o algo así)
+    for key, fname in FILE_MAP.items():
+        if key in name_l:
+            cfg_name = fname
+            break
+
+    # Si no matchea ninguno, puedes elegir un default
+    if cfg_name is None:
+        cfg_name = "params_pm01.json"
+        print(f"[boot] WARNING: robot '{robot_name}' sin entrada específica, usando {cfg_name}")
+
+    path = os.path.join(HERE, cfg_name)
+    print(f"[boot] Cargando config {cfg_name} para robot '{robot_name}'")
+
+    with open(path, "r") as f:
         return json.load(f)
+
 
 def run():
     robot = Robot()
     dt = TIME_STEP / 1000.0
 
     # --- Config y logger ---
-    params   = load_params()
+    robot_name = robot.getName()
+    ROBOT_NAME = robot.getName()
+    params   = load_params(robot_name)
     limits   = params.get("limits", {})
     log_cfg  = params.get("logging", {})
-    LOG      = RateLogger(log_cfg, time.monotonic)
+    LOG      = RateLogger(log_cfg, time.monotonic,robot_name=ROBOT_NAME)
+    controls_cfg = params.get("controls", {})
+    kb_enabled   = bool(controls_cfg.get("enable_keyboard", True))
+
 
     LOG.info("boot", "mcvilloid_controller: init")
     LOG.debug("boot", f"params keys: {list(params.keys())}")
 
     # --- Teclado ---
-    kb = robot.getKeyboard()
-    kb.enable(TIME_STEP)
+    # --- Teclado (opcional según params) ---
+    kb = None
+    controls_cfg = params.get("controls", {})
+    if controls_cfg.get("enable_keyboard", False):
+        kb = robot.getKeyboard()
+        kb.enable(TIME_STEP)
+        LOG.info("boot", f"Keyboard ENABLED for robot '{robot_name}'")
+    else:
+        LOG.info("boot", f"Keyboard DISABLED for robot '{robot_name}'")
 
     # --- Dispositivos ---
     imu_name = params.get("imu_name", "imu_sensor")
@@ -88,14 +125,19 @@ def run():
     _walk_time_since_on = 0.0
     # --- Motores (desde params.json) ---
     motor_names = params.get("motors", [])
-    motors = {}
-    for n in motor_names:
-        dev = robot.getDevice(n)
+    motor_map   = params.get("motor_map", {})
+
+    motors = {}  # clave = nombre lógico (j00_..., j04_..., etc.)
+    for logical_name in motor_names:
+        dev_name = motor_map.get(logical_name, logical_name)
+        dev = robot.getDevice(dev_name)
         if dev:
-            motors[n] = dev
+            motors[logical_name] = dev
         else:
-            LOG.warn("boot", f"Motor '{n}' NOT FOUND")
-    LOG.info("boot", f"Motores OK: {sorted(motors.keys())}")
+            LOG.warn("boot", f"Motor '{logical_name}' (device='{dev_name}') NOT FOUND")
+
+    LOG.info("boot", f"Motores OK (lógicos): {sorted(motors.keys())}")
+
 
     # Límites de velocidad por tipo (valores razonables)
     ank_vel = float(limits.get("ankle_vel", 1.0))
@@ -126,7 +168,8 @@ def run():
 
     # Postura neutra
     neutral_cfg = (params.get("neutral_pose") or {})
-    base_pose = {name: float(neutral_cfg.get(name, 0.0)) for name in motors.keys()}
+    #base_pose = {name: float(neutral_cfg.get(name, 0.0)) for name in motors.keys()}
+    base_pose = {name: float(neutral_cfg.get(name, 0.0)) for name in motor_names}
 
     # Anti-trasera: leve plantar de base en ambos tobillos pitch
     #for ank in ("j04_ankle_pitch_l", "j10_ankle_pitch_r"):
@@ -230,6 +273,7 @@ def run():
             STRIDE_MAX,
             gait_enable,
             LOG,
+            enabled=kb_enabled
         )
 
         # 1) IMU + filtrado + estabilidad (delegado a imu_stability.py)
@@ -320,26 +364,49 @@ def run():
 
         gait_gain = min(g_pitch, g_roll)
 
-
         # 4) FSM Gait principal
-        can_walk     = abs(pitch_f) < T_ENTER
+        
+        # Permitir más pitch hacia ADELANTE que hacia ATRÁS para el guard de arranque
+        # - hacia atrás (pitch_f < 0): seguimos siendo estrictos
+        # - hacia adelante (pitch_f > 0): dejamos hasta ~0.18 rad (~10°)
+        P_ENTER_FWD  = 0.18   # umbral para empezar estando inclinado hacia adelante
+        P_ENTER_BACK = 0.10   # umbral hacia atrás (mantener más estricto)
+        
+        if pitch_f >= 0.0:
+            can_walk_pitch = (pitch_f < P_ENTER_FWD)
+        else:
+            can_walk_pitch = (abs(pitch_f) < P_ENTER_BACK)
+        
+        can_walk = can_walk_pitch
+        
         near_fall = (
             (abs(pitch_f) > T_FALL) or
             (abs(roll_f)  > 0.32)   or
             (abs(pitch_f) > max(T_WARN, 0.20) and gait_gain < 0.20)
         )
-
+        
         if state == "STAND":
             walk_timer = 0.0
             if near_fall:
                 state = "RECOVER"
                 recover_timer = 0.0
                 bal_prev.clear()
-                for j in ("j04_ankle_pitch_l", "j10_ankle_pitch_r", "j05_ankle_roll_l", "j11_ankle_roll_r"):
+                for j in ("j04_ankle_pitch_l", "j10_ankle_pitch_r",
+                          "j05_ankle_roll_l", "j11_ankle_roll_r"):
                     bal_prev[j] = 0.0
-            elif gait_enable and can_walk and (abs(roll_f) < R_STAB) and not pose["on"]:
-                state = "PRELEAN"
-                prelean_timer = 0.0
+            elif gait_enable and (abs(roll_f) < R_STAB) and not pose["on"]:
+                if can_walk:
+                    state = "PRELEAN"
+                    prelean_timer = 0.0
+                else:
+                    # Log de diagnóstico para este problema específico
+                    LOG.info(
+                        "gait",
+                        f"[GUARD_STAND] bloqueado STAND->PRELEAN: "
+                        f"pitch_f={pitch_f:+.3f} roll_f={roll_f:+.3f} "
+                        f"can_walk={can_walk} P_ENTER_FWD={P_ENTER_FWD:.3f} P_ENTER_BACK={P_ENTER_BACK:.3f}"
+                    )
+
 
         elif state == "WALK":
             SAFE_GRACE_S = 0.35
@@ -408,9 +475,6 @@ def run():
                     state = "STAND"
 
 
-
-
-
         elif state == "PRELEAN":
             prelean_timer += dt
             if not gait_enable or pose["on"]:
@@ -460,9 +524,6 @@ def run():
                 if ank in target:
                     target[ank] += ank_bias
 
-
-
-        
         elif state == "RECOVER":
             # Apagamos gait mientras recuperamos
             desired_on = False
@@ -659,10 +720,6 @@ def run():
                 state = state_next
                 recover_timer = recover_next
 
-
-
-
-
         elif state == "RECOVER":
             desired_on = False
             walker.set_global_gain(0.0)
@@ -748,7 +805,6 @@ def run():
                 cmd = base + delta
 
             m.setPosition(cmd)
-
 
         # === GPS / dirección ===
         if not hasattr(walker, "dir"):
