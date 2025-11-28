@@ -1,14 +1,45 @@
+# src/mcvilloid/controllers/mcvilloid_controller/balance/balance.py
 import math
 from .filters import Lowpass, deadband_deg, SoftStart
 
+
 class BalanceController:
     """
-    Control PD(+I opcional) en pitch/roll y mezcla a articulaciones.
+    Controlador de balance para el robot (pitch y roll).
+
+    - Implementa un control PD (+I opcional) por ejes:
+        * pitch: inclinación hacia adelante / atrás
+        * roll: inclinación lateral
+    - Convierte el error de IMU (rad) a grados para aplicar:
+        * deadband (zona muerta)
+        * quiet-zone (zona de baja ganancia cerca del equilibrio)
+        * filtros derivativos
+    - Mezcla las salidas en articulaciones:
+        * Tobillos: j04_ankle_pitch_l, j10_ankle_pitch_r, j05_ankle_roll_l, j11_ankle_roll_r
+        * Caderas:  j00_hip_pitch_l, j06_hip_pitch_r, j01_hip_roll_l, j07_hip_roll_r
+
     Lee de params:
-      - enable_I, gains, ki, mix, limits, signs, joint_signs
-      - fc_d_pitch_hz, fc_d_roll_hz, deadband_deg, soft_start_s
-      - cmd_lpf_tau_s (suavizado de salida por τ), quiet_zone_deg
+      - enable_I: bool, habilita término integral.
+      - gains:   { "pitch": {kp, kd}, "roll": {kp, kd} } en unidades de grados.
+      - ki:      { "pitch": ki_p, "roll": ki_r } integrales (deg⁻¹ * s⁻¹ aprox).
+      - mix:     { "pitch_to_ankle", "roll_to_ankle" } mezcla tobillo/cadera.
+      - limits:  { "ankle_cmd": max_rad } límite de comando de tobillo.
+      - signs:   { invert_pitch, invert_roll } invierte error de IMU.
+      - joint_signs:
+            {
+                "ankle_pitch_l", "ankle_pitch_r", "ankle_pitch",
+                "hip_pitch_l",   "hip_pitch_r",   "hip_pitch",
+                "ankle_roll_l",  "ankle_roll_r",  "ankle_roll",
+                "hip_roll_l",    "hip_roll_r",    "hip_roll",
+            }
+      - fc_d_pitch_hz, fc_d_roll_hz: frecuencia de corte de derivadas (Hz).
+      - deadband_deg:     zona muerta en grados alrededor de 0.
+      - soft_start_s:     tiempo de rampa para subir la ganancia de 0→1.
+      - cmd_lpf_tau_s:    constante de tiempo del filtro de salida (τ).
+      - quiet_zone_deg:   holgura adicional para bajar Kp y anular D cerca de 0.
+      - i_limit_deg:      límite del integrador en deg.
     """
+
     def __init__(self, params: dict, logger=print):
         self.p = params or {}
         self.logger = logger
@@ -18,7 +49,7 @@ class BalanceController:
         self.gains = self.p.get("gains", {})
         self.ki = self.p.get("ki", {"pitch": 0.0, "roll": 0.0})
 
-        # Mezclas
+        # Mezclas globales (pitch/roll → tobillos y caderas)
         self.mix = self.p.get("mix", {})
         self.signs = self.p.get("signs", {"invert_pitch": False, "invert_roll": False})
 
@@ -26,7 +57,7 @@ class BalanceController:
         self.deadband = float(self.p.get("deadband_deg", 0.0))
         self.softstart = SoftStart(self.p.get("soft_start_s", 0.0))
 
-        # Límites (por si luego los usas)
+        # Límites (ej. límite de comando a tobillos)
         self.limits = self.p.get("limits", {})
 
         # Filtros derivativos por eje (pitch/roll)
@@ -63,7 +94,11 @@ class BalanceController:
         self.s_ar_r = float(js.get("ankle_roll_r",  js.get("ankle_roll",  1.0)))
         self.s_hr_r = float(js.get("hip_roll_r",    js.get("hip_roll",    1.0)))
 
-    def _ensure_filters(self, dt: float):
+    def _ensure_filters(self, dt: float) -> None:
+        """
+        Asegura que los filtros internos (derivativos y de salida) estén
+        inicializados y con la frecuencia correcta para el dt actual.
+        """
         # Derivativos
         fc_p = float(self.p.get("fc_d_pitch_hz", 12.0))
         fc_r = float(self.p.get("fc_d_roll_hz", 10.0))
@@ -85,7 +120,13 @@ class BalanceController:
             self._lp_cmd_pitch.set(self._cmd_fc_hz, dt)
             self._lp_cmd_roll.set(self._cmd_fc_hz, dt)
 
-    def reset(self):
+    def reset(self) -> None:
+        """
+        Resetea el estado interno del controlador de balance:
+        - Integradores
+        - Error previo para derivada
+        - Soft-start
+        """
         self.i_pitch = 0.0
         self.i_roll = 0.0
         self._prev_p = 0.0
@@ -94,7 +135,15 @@ class BalanceController:
 
     def step(self, dt: float, imu_pitch_rad: float, imu_roll_rad: float) -> dict:
         """
-        Devuelve dict {joint: delta_pos_rad} para sumar a neutral_pose.
+        Ejecuta un paso de control de balance.
+
+        Parámetros:
+        - dt:            paso de tiempo [s].
+        - imu_pitch_rad: pitch medido por IMU [rad].
+        - imu_roll_rad:  roll medido por IMU [rad].
+
+        Devuelve:
+        - dict {joint_name: delta_pos_rad} que se suma a la neutral_pose.
         """
         self._ensure_filters(dt)
         g_soft = self.softstart.gain(dt)
@@ -124,7 +173,7 @@ class BalanceController:
         self._prev_p = e_p_db
         self._prev_r = e_r_db
 
-        # Integración (si habilitada)
+        # Integración (si habilitada) en deg*s
         if self.enable_I:
             self.i_pitch = max(-self.i_lim_deg, min(self.i_lim_deg, self.i_pitch + e_p_db * dt))
             self.i_roll  = max(-self.i_lim_deg, min(self.i_lim_deg, self.i_roll  + e_r_db * dt))
@@ -154,7 +203,7 @@ class BalanceController:
         u_r = self._lp_cmd_roll.step(math.radians(u_r_deg))  * g_soft
 
         # Mezcla a articulaciones
-        mix_pa = float(self.mix.get("pitch_to_ankle", 0.22))   # tus valores por defecto
+        mix_pa = float(self.mix.get("pitch_to_ankle", 0.22))   # default usado en tus params
         mix_ra = float(self.mix.get("roll_to_ankle",  0.70))
 
         u_ap = u_p * mix_pa
@@ -162,6 +211,7 @@ class BalanceController:
         u_ar = u_r * mix_ra
         u_hr = u_r * (1.0 - mix_ra)
 
+        # Límite de comando a tobillos (para no romper gait)
         ankle_cmd_lim = float(self.limits.get("ankle_cmd", 0.03))
         u_ap = max(-ankle_cmd_lim, min(ankle_cmd_lim, u_ap))
 

@@ -1,4 +1,24 @@
 # src/mcvilloid/controllers/mcvilloid_controller/gait_shaping.py
+"""
+Módulo de shaping de marcha para McVilloid.
+
+Contiene dos piezas principales:
+
+1) apply_gait_offsets(...)
+   - Toma los offsets de marcha generados por el Walker (gait_off) y
+     los aplica sobre el vector de consignas `target`, reescalando
+     por stride_gain y ajustando la simetría de rodillas.
+
+2) update_walk_outputs(...)
+   - Lógica de alto nivel cuando la FSM global está en estado "WALK":
+       * soft-start de la ganancia de marcha
+       * adaptación de STRIDE_BASE y stride_gain según estabilidad
+       * integración con step_fsm_update (paso bueno/malo)
+       * pequeños sesgos de cadera/tobillos para capturar el COM
+       * límites/guardas cuando hay riesgo de caída
+       * logging de telemetría [TUNE]
+"""
+
 import math
 
 try:
@@ -19,9 +39,38 @@ def apply_gait_offsets(
     left_is_swing,
 ):
     """
-    Aplica los offsets de marcha (walker.step) a las juntas,
-    reescalando por stride_gain y metiendo los match de rodillas.
-    Modifica 'target' in-place.
+    Aplica los offsets de marcha producidos por `walker.step()` sobre `target`.
+
+    Parámetros
+    ----------
+    gait_off : dict
+        Diccionario {joint_name: delta_rad} devuelto por Walker.step().
+    target : dict
+        Diccionario de consignas actuales de juntas (se modifica in-place).
+    base_pose : dict
+        Pose neutra de referencia (actualmente usada sólo para diagnóstico).
+    stride_gain : float
+        Escala de zancada calculada por update_walk_outputs.
+    pitch_f : float
+        Pitch filtrado de IMU (rad), usado para scaling condicional.
+    gyro :
+        Dispositivo de gyro de Webots (puede ser None).
+    gy : float
+        Componente de giro en pitch (rad/s) si hay gyro; 0.0 si no.
+    walker :
+        Instancia de Walker, usada sólo para leer `phase` (0..1) para matching.
+    left_is_swing : bool
+        Indica si la pierna izquierda está en swing (según Walker / controlador).
+
+    Notas
+    -----
+    - La función respeta las claves de `target`; si una junta de gait_off
+      no está en target, se ignora.
+    - Se reescala por tipo de junta:
+        * cadera: escala más agresiva, adaptada a pitch y gyro
+        * rodilla / tobillo: escalas dependientes de stride_gain
+    - Matching de rodillas:
+        * limita asimetrías rodilla L/R para evitar pasos muy disparejos.
     """
     if not gait_off:
         return
@@ -33,6 +82,7 @@ def apply_gait_offsets(
         # Escala por tipo de junta
         if "hip_pitch" in j:
             scale = 1.25 * stride_gain
+            # Boost extra si el cuerpo está relativamente estable
             if (abs(pitch_f) < 0.18) and (not gyro or abs(gy) < 0.20):
                 if abs(pitch_f) < 0.12 and (not gyro or abs(gy) < 0.12):
                     scale *= 1.08
@@ -52,23 +102,19 @@ def apply_gait_offsets(
     knee_L, knee_R = "j03_knee_pitch_l", "j09_knee_pitch_r"
 
     def _match(a, b, k=1.20):
+        """Limita la asimetría: |a| <= k * |b| manteniendo el signo de a."""
         if abs(a) > k * abs(b):
             return math.copysign(k * abs(b), a)
         return a
 
-    # Primera pasada: limitar asimetría global según fase
+    # Primera pasada: limitar asimetría global según fase (qué pierna “manda”)
     if knee_L in target and knee_R in target:
         if phase < 0.5:
             target[knee_R] = _match(target[knee_R], target[knee_L], k=1.20)
         else:
             target[knee_L] = _match(target[knee_L], target[knee_R], k=1.20)
 
-    # (Opcional) amplitud relativa respecto a base_pose (se mantiene aunque no se use)
-    amp_L = target.get(knee_L, base_pose.get(knee_L, 0.0))
-    amp_R = target.get(knee_R, base_pose.get(knee_R, 0.0))
-    _ = (amp_L, amp_R)  # solo para evitar warnings de variable no usada
-
-    # Segunda pasada: matching según pierna en swing
+    # Segunda pasada: matching según pierna en swing (refuerza simetría)
     if knee_L in target and knee_R in target:
         if left_is_swing:
             target[knee_L] = _match(target[knee_L], target[knee_R], k=1.20)
@@ -107,40 +153,57 @@ def update_walk_outputs(
     bal_prev,
 ):
     """
-    Lógica completa de salidas cuando state == 'WALK':
-      - soft start del gait
-      - bias de tobillos en apoyo
-      - conteo de pasos + step_fsm_update (bueno/malo)
-      - cálculo de stride_gain
-      - recortes por inestabilidad / pitch
-      - toques de COM, toe-off, heel-strike, etc.
-      - logging [TUNE]
-    Devuelve:
-      walk_timer, gait_soft_t, STRIDE_BASE, steps_taken,
-      gait_gain, stride_gain, step_ctx, _tele_t,
-      state, recover_timer, left_is_swing
+    Lógica de shaping de marcha cuando la FSM global está en estado "WALK".
+
+    Se encarga de:
+      - Hacer el soft-start de la ganancia de marcha (gait_soft_t / GAIT_SOFT_S).
+      - Contar pasos y llamar a step_fsm_update (clasifica pasos buenos/malos).
+      - Ajustar STRIDE_BASE y stride_gain según estabilidad (IMU y progreso).
+      - Recortar stride/gait_gain cuando:
+            * el robot se va hacia atrás (pitch_f < 0 o gy muy negativo)
+            * el robot “se lanza” demasiado hacia adelante
+      - Aplicar pequeños sesgos en caderas/tobillos para capturar el COM
+        (toe-off, heel-strike amortiguado, mid-stance, etc.).
+      - Actualizar la ganancia global del Walker (set_global_gain).
+      - Loguear telemetría [TUNE] cada ~0.5 segundos.
+
+    Devuelve
+    --------
+    (walk_timer,
+     gait_soft_t,
+     STRIDE_BASE,
+     steps_taken,
+     gait_gain,
+     stride_gain,
+     step_ctx,
+     _tele_t,
+     state,
+     recover_timer,
+     left_is_swing)
+
+    donde:
+      - stride_gain : escala final de zancada (afecta apply_gait_offsets)
+      - left_is_swing : True si la pierna izquierda está en swing
     """
+
     # Avanza cronómetro de marcha
     walk_timer += dt
 
-    # soft gain
+    # Soft-start del gain
     gait_soft_t = min(GAIT_SOFT_S, gait_soft_t + dt)
     soft_gain = min(1.0, max(0.0, gait_soft_t / GAIT_SOFT_S))
 
     phase = getattr(walker, "phase", 0.0)
-    left_is_swing   = (phase >= 0.5)
-    right_is_swing  = not left_is_swing
-    left_is_support  = not left_is_swing
-    right_is_support = not right_is_swing
+    left_is_swing = (phase >= 0.5)
 
     # (por ahora sin bias explícito de tobillo en apoyo)
     # SUPPORT_BIAS = -0.03
-    # if left_is_support and "j04_ankle_pitch_l" in target:
+    # if not left_is_swing and "j04_ankle_pitch_l" in target:
     #     target["j04_ankle_pitch_l"] += SUPPORT_BIAS
-    # if right_is_support and "j10_ankle_pitch_r" in target:
+    # if left_is_swing and "j10_ankle_pitch_r" in target:
     #     target["j10_ankle_pitch_r"] += SUPPORT_BIAS
 
-    # contar pasos + evento de nuevo paso (fase dio la vuelta)
+    # Contar pasos + evento de nuevo paso (fase dio la vuelta)
     new_step = False
     if step_ctx["prev_phase"] > 0.90 and phase < 0.10:
         steps_taken += 1
@@ -163,37 +226,37 @@ def update_walk_outputs(
             step_ctx,
         )
 
-    # flag de calidad del último paso
+    # Flag de calidad del último paso
     step_ok = step_ctx.get("ok", True)
 
-    # limitador primeros pasos
+    # Limitador primeros pasos (no arrancar con strides grandes)
     if steps_taken < WARM_STEPS:
         micro = 0.55 + 0.15 * steps_taken
     else:
         micro = 1.0
 
-    # ---------- estabilidad y boost de base ----------
+    # ---------- estabilidad y boost de STRIDE_BASE ----------
     stable = (abs(pitch_f) < 0.18) and (not gyro or abs(gy) < 0.20)
     STRIDE_BASE_TARGET = 1.50  # target de zancada base
     if stable:
         STRIDE_BASE = 0.85 * STRIDE_BASE + 0.15 * min(STRIDE_MAX, STRIDE_BASE_TARGET)
 
-    soft_str   = min(1.0, max(0.0, walk_timer / STRIDE_WARM_S))
-    stab_p     = max(0.0, 1.0 - min(0.12, abs(pitch_f)) / 0.12)
-    stab_r     = max(0.0, 1.0 - min(0.12, abs(roll_f))  / 0.12)
-    stability  = stab_p * stab_r
+    soft_str = min(1.0, max(0.0, walk_timer / STRIDE_WARM_S))
+    stab_p = max(0.0, 1.0 - min(0.12, abs(pitch_f)) / 0.12)
+    stab_r = max(0.0, 1.0 - min(0.12, abs(roll_f)) / 0.12)
+    stability = stab_p * stab_r
 
-    # stride extra algo agresivo
+    # Stride extra algo agresivo, pero acotado
     stride_gain = STRIDE_BASE + 0.7 * (soft_str * stability)
     stride_gain = max(STRIDE_MIN, min(STRIDE_MAX, stride_gain))
     stride_gain *= micro
 
-    # freno adicional por inestabilidad
+    # Freno adicional por inestabilidad
     instab_pitch = max(0.0, -pitch)  # sólo cuando se va hacia atrás
-    instab_roll  = max(0.0, abs(roll_f) - 0.06)
+    instab_roll = max(0.0, abs(roll_f) - 0.06)
 
     k_pitch = 1.0 - min(0.5, (instab_pitch / 0.15) * 0.5)
-    k_roll  = 1.0 - min(0.5, (instab_roll  / 0.14) * 0.5)
+    k_roll = 1.0 - min(0.5, (instab_roll / 0.14) * 0.5)
     k_instab = max(0.6, min(1.0, k_pitch * k_roll))
     stride_gain *= k_instab
 
@@ -203,11 +266,10 @@ def update_walk_outputs(
 
     rel_dx = _dx_avg * getattr(walker, "dir", 1.0)
 
+    # Si “retrocede” cuando queremos avanzar, capar stride y gain
     if walk_timer > 0.8 and rel_dx < -0.02:
-        # Estamos "retrocediendo" cuando deberíamos avanzar:
-        # baja zancada y también un poco la ganancia del gait.
         stride_gain *= 0.75
-        gait_gain   = min(gait_gain, 0.20)
+        gait_gain = min(gait_gain, 0.20)
 
     # Anti-runaway si el torso se va al frente
     if pitch_f > 0.22:
@@ -222,6 +284,7 @@ def update_walk_outputs(
             if j in target:
                 target[j] = max(-0.10, target[j])
 
+    # Sesgo adicional si el pitch filtrado se pasa todavía más
     ppos = max(0.0, pitch_f)
     over_k = 0.0 if ppos < 0.22 else min(1.0, (ppos - 0.22) / (0.34 - 0.22))
     if over_k > 0.0:
@@ -244,13 +307,14 @@ def update_walk_outputs(
         max_str = max(0.65, max_str)
         stride_gain = min(stride_gain, max_str)
 
+    # Bias de cadera pequeño a mitad de paso
     HIP_MIDFF = min(0.045, 0.055 * stride_gain)
     for hip in ("j00_hip_pitch_l", "j06_hip_pitch_r"):
         target[hip] += HIP_MIDFF * 0.5
 
     pitch_rate = gy if gyro else 0.0
 
-    # refuerzo de COM hacia delante en 8–18% de fase
+    # Refuerzo de COM hacia delante en 8–18% de fase
     if 0.08 < phase < 0.18:
         right_is_support = (phase < 0.5)
         hip_sup = "j06_hip_pitch_r" if right_is_support else "j00_hip_pitch_l"
@@ -268,6 +332,7 @@ def update_walk_outputs(
 
     g_nom = (gait_gain * soft_gain * trend_brake) * micro
 
+    # Cap de ganancia global según número de pasos y calidad
     if steps_taken < 2:
         g_cap = 0.30
     elif steps_taken < 5:
@@ -286,12 +351,13 @@ def update_walk_outputs(
     if pitch_f > 0.32:
         g_cap = min(g_cap, 0.32)
 
+    # Hacia atrás
     if pitch_f < -0.10:
         g_cap = min(g_cap, 0.28)
     if pitch_f < -0.18:
         g_cap = min(g_cap, 0.20)
 
-    # piso de ganancia un poco más bajo
+    # Piso de ganancia ligeramente más bajo, con cap
     walker.set_global_gain(min(g_cap, max(0.18, g_nom)))
 
     # Telemetría debug (cada 0.5 s)
@@ -314,7 +380,7 @@ def update_walk_outputs(
     # Lifts de pierna en swing: sólo rodilla por ahora
     if abs(pitch_f) < 0.25 and gait_gain > 0.15:
         LIFT_KNEE_SW = 0.090
-        LIFT_ANK_SW  = 0.0   # tobillo apagado
+        LIFT_ANK_SW = 0.0   # tobillo apagado
 
         # L swing
         if left_is_swing:
@@ -330,7 +396,7 @@ def update_walk_outputs(
             # if "j10_ankle_pitch_r" in target:
             #     target["j10_ankle_pitch_r"] += LIFT_ANK_SW
 
-    # Clamps locales
+    # Clamps locales de tobillo según pitch/roll
     if pitch < -0.08:
         BAL_PITCH_LIM_LOCAL = 0.06
         for j in ("j04_ankle_pitch_l", "j10_ankle_pitch_r"):
@@ -356,7 +422,7 @@ def update_walk_outputs(
                 target[ap] += ank_corr
         # No tocamos caderas aquí para no pelear con el lazo de pitch principal
 
-    # Swing retraction
+    # Swing retraction en los extremos de fase
     if (phase > 0.82) or (phase < 0.06):
         RETRACT = -0.025
         for hip in ("j00_hip_pitch_l", "j06_hip_pitch_r"):
@@ -397,17 +463,17 @@ def update_walk_outputs(
     if (phase > 0.96) or (phase < 0.08):
         left_is_striking = (phase < 0.08)
         knee_strike = "j03_knee_pitch_l" if left_is_striking else "j09_knee_pitch_r"
-        ank_strike  = "j04_ankle_pitch_l" if left_is_striking else "j10_ankle_pitch_r"
+        ank_strike = "j04_ankle_pitch_l" if left_is_striking else "j10_ankle_pitch_r"
         if knee_strike in target:
             target[knee_strike] += +0.040
-        if ank_strike  in target:
-            target[ank_strike]  += +0.020
+        if ank_strike in target:
+            target[ank_strike] += +0.020
         ank_roll_strike = "j05_ankle_roll_l" if left_is_striking else "j11_ankle_roll_r"
         if ank_roll_strike in target:
             base = base_pose.get(ank_roll_strike, 0.0)
             target[ank_roll_strike] = 0.6 * target[ank_roll_strike] + 0.4 * base
 
-    # Sesgo lateral en apoyo
+    # Sesgo lateral en apoyo (ligera inclinación de cadera de soporte)
     if (phase > 0.45) and (phase < 0.65):
         left_is_support = (phase < 0.5)
         hip_roll_sup = "j07_hip_roll_r" if left_is_support else "j01_hip_roll_l"

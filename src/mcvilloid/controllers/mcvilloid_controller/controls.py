@@ -1,11 +1,27 @@
 # controls.py
 """
-Manejo de teclado para McVilloid:
-- W/S: habilitar/deshabilitar marcha
-- A/D: dirección (atrás / adelante)
-- F/G/H: poses estáticas (levantar pierna)
-- P/M: ajustar zancada base
+Manejo de teclado para McVilloid (Webots Keyboard).
+
+Teclas soportadas
+-----------------
+Marcha:
+    - W / w : habilitar marcha (gait_enable = True)
+    - S / s : deshabilitar marcha (gait_enable = False)
+
+Dirección:
+    - A / a : dirección hacia atrás (walker.dir = -1.0)
+    - D / d : dirección hacia adelante (walker.dir = +1.0)
+
+Poses estáticas (levantar pierna con transferencia de peso):
+    - F : activar pose en pierna izquierda (side = 'L')
+    - G : activar pose en pierna derecha  (side = 'R')
+    - H : cancelar pose actual
+
+Zancada base:
+    - P : aumentar STRIDE_BASE (limitado por STRIDE_MAX)
+    - M : reducir  STRIDE_BASE (limitado por STRIDE_MIN)
 """
+
 
 def handle_keyboard(
     kb,
@@ -19,11 +35,45 @@ def handle_keyboard(
     enabled: bool = True,
 ):
     """
-    Lee las teclas y actualiza:
-      - gait_enable
-      - walker.dir
-      - pose
-      - STRIDE_BASE (y se lo setea al walker)
+    Lee las teclas del teclado Webots y actualiza varios estados de marcha.
+
+    Parámetros
+    ----------
+    kb :
+        Instancia de Keyboard de Webots (robot.getKeyboard()).
+    walker :
+        Instancia de Walker encargada de generar offsets de marcha.
+    pose : dict
+        Diccionario de estado de la FSM de pose (levantar pierna estática).
+        Se modifica in-place con campos como:
+            - "on":   bool (pose activa o no)
+            - "side": 'L' o 'R'
+            - "phase": fase interna ("SHIFT", "LIFT", etc., según pose_fsm)
+            - "t":   tiempo acumulado en la fase
+    STRIDE_BASE : float
+        Valor actual de la zancada base (multiplicador de amplitud).
+    STRIDE_MIN : float
+        Límite inferior permitido para STRIDE_BASE.
+    STRIDE_MAX : float
+        Límite superior permitido para STRIDE_BASE.
+    gait_enable : bool
+        Flag global que indica si la marcha está habilitada (FSM principal).
+    LOG :
+        Logger compatible con RateLogger, usado para imprimir eventos.
+    enabled : bool, opcional
+        Si es False, se ignoran por completo las teclas (no se modifica nada).
+
+    Devuelve
+    --------
+    (gait_enable, STRIDE_BASE) : tuple
+        El nuevo valor de gait_enable y STRIDE_BASE después de procesar teclas.
+
+    Notas
+    -----
+    - Si `enabled` es False, la función simplemente devuelve los valores de
+      entrada sin leer el teclado.
+    - Esta función no avanza ningún estado por sí misma, sólo actualiza flags
+      y parámetros que luego usará el controller y el Walker.
     """
 
     # Si el teclado está deshabilitado por config, no hacemos nada

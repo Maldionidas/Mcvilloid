@@ -2,7 +2,7 @@
   "enable_I": true,
 
   "controls": {
-    "enable_keyboard": false
+    "enable_keyboard": true
   },
 
   "gains": {
