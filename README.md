@@ -162,7 +162,7 @@ El archivo:
 
 Este proyecto está pensado para correrse en simulación con Webots y, opcionalmente, lanzarse desde ROS 2 usando el launch anterior.
 
-## 5.1. Sistema operativo recomendado
+5.1. **Sistema operativo recomendado**
 
 Ubuntu 22.04 (nativo), o
 
@@ -204,14 +204,16 @@ Si agregas librerías externas, instálalas sin entorno virtual:
 
 pip3 install --user numpy
 
+---
+
 ## 6. Clonar el proyecto en un workspace
 
 La forma más cómoda de usar este repo es dentro de un workspace de ROS 2, en ~/ros2_ws:
-# Crear workspace si no lo tienes
+### Crear workspace si no lo tienes
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 
-# Clonar este repositorio
+### Clonar este repositorio
 git clone https://github.com/Maldionidas/Mcvilloid.git mcvilloid
 
 Si usas ROS 2 y quieres compilar el workspace:
@@ -224,6 +226,8 @@ Para dejarlo en el bash:
 echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
 
+---
+
 ## 7.  Webots desde ROS 2 con mi_robot_launch.py
 
 Esta opción te permite integrar el simulador con un sistema ROS 2 más grande.
@@ -234,7 +238,7 @@ WEBOTS_HOME apuntando a tu instalación de Webots.
 
 El repo clonado en ~/ros2_ws/src/mcvilloid.
 
-(Opcional) El workspace compilado con colcon build.
+El workspace compilado con colcon build.
 
 En una terminal:
 
