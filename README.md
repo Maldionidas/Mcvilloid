@@ -153,5 +153,97 @@ Desde `controls.py`:
 
 El archivo:
 
-```text
+``text
 ~/ros2_ws/src/mcvilloid/launch/mi_robot_launch.py
+
+---
+
+## 5. Requisitos para correr el proyecto
+
+Este proyecto está pensado para correrse en simulación con Webots y, opcionalmente, lanzarse desde ROS 2 usando el launch anterior.
+
+## 5.1. Sistema operativo recomendado
+
+Ubuntu 22.04 (nativo), o
+
+Windows + WSL2 con Ubuntu 22.04 (Webots instalado en Windows y ROS2/código en WSL).
+
+5.2. **Software necesario**
+
+1. Git
+sudo apt update
+sudo apt install -y git
+
+2. Python 3 + pip (sin venv)
+sudo apt install -y python3 python3-pip
+python3 --version
+pip3 --version
+
+3. Webots
+
+Instala Webots desde la página oficial de Cyberbotics.
+
+Define la variable de entorno WEBOTS_HOME, por ejemplo:
+# Ejemplo en Linux
+echo 'export WEBOTS_HOME="/usr/local/webots"' >> ~/.bashrc
+source ~/.bashrc
+Ajusta la ruta según dónde se haya instalado Webots.
+
+4.ROS 2 
+
+Probado con ROS 2 Humble (Ubuntu 22.04).
+
+Tras instalar ROS 2, agrega al ~/.bashrc:
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+5. Dependencias Python (mínimas)
+
+El controlador está escrito en Python 3 y usa principalmente la librería estándar.
+Si agregas librerías externas, instálalas sin entorno virtual:
+
+pip3 install --user numpy
+
+## 6. Clonar el proyecto en un workspace
+
+La forma más cómoda de usar este repo es dentro de un workspace de ROS 2, en ~/ros2_ws:
+# Crear workspace si no lo tienes
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+# Clonar este repositorio
+git clone https://github.com/Maldionidas/Mcvilloid.git mcvilloid
+
+Si usas ROS 2 y quieres compilar el workspace:
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build
+source install/setup.bash
+
+Para dejarlo en el bash:
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+
+## 7.  Webots desde ROS 2 con mi_robot_launch.py
+
+Esta opción te permite integrar el simulador con un sistema ROS 2 más grande.
+
+Asegúrate de tener:
+
+WEBOTS_HOME apuntando a tu instalación de Webots.
+
+El repo clonado en ~/ros2_ws/src/mcvilloid.
+
+(Opcional) El workspace compilado con colcon build.
+
+En una terminal:
+
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash  # si ya compilaste el workspace
+
+Lanza el archivo de launch del proyecto:
+
+ros2 launch mcvilloid mi_robot_launch.py
+
+
